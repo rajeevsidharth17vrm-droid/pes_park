@@ -1,0 +1,82 @@
+import { TrendingUp } from "lucide-react"
+import { cn } from "../../lib/utils"
+
+export default function MarketValues({ players, onPlayerClick }) {
+  const sorted = [...players].sort((a, b) => b.marketValue - a.marketValue)
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between">
+        <div>
+          <p className="section-label mb-0.5">Market values</p>
+          <h2 className="text-base font-semibold text-white">Player valuations</h2>
+        </div>
+        <TrendingUp className="w-4 h-4 text-accent" />
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-surface-border">
+              {["#", "Player", "Team", "Auction", "MV"].map((h) => (
+                <th
+                  key={h}
+                  className={cn(
+                    "py-2.5 text-xs font-semibold text-slate-500 tracking-wide",
+                    h === "Player" || h === "Team" ? "text-left px-4" : "text-center px-3",
+                    h === "MV" && "text-accent"
+                  )}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((player, idx) => {
+              const isFirst = idx === 0
+              const delta   = player.marketValue - player.auctionPrice
+
+              return (
+                <tr
+                  key={player.id}
+                  onClick={() => onPlayerClick?.(player)}
+                  className={cn(
+                    "table-row-hover border-b border-surface-border/50 cursor-pointer",
+                    isFirst && "bg-gold/5"
+                  )}
+                >
+                  <td className="py-3 px-3 text-center">
+                    {isFirst
+                      ? <span className="rank-gold text-sm">1</span>
+                      : <span className="text-slate-500 text-sm">{idx + 1}</span>
+                    }
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={cn("font-medium", isFirst ? "text-white" : "text-slate-300")}>
+                      {player.name}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-slate-400 text-xs">{player.team}</td>
+                  <td className="py-3 px-3 text-center font-mono text-slate-400 text-sm">
+                    {player.auctionPrice}
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <div className="flex flex-col items-center">
+                      <span className={cn("font-bold font-mono text-sm", isFirst ? "text-gold" : "text-white")}>
+                        {player.marketValue}
+                      </span>
+                      <span className={cn("text-xs font-mono", delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-slate-500")}>
+                        {delta > 0 ? `+${delta}` : delta}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

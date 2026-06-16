@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-surface-border; }
+  body {
+    @apply bg-pitch-900 text-white antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-pitch-900; }
+  ::-webkit-scrollbar-thumb { @apply bg-surface-border rounded-full; }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface rounded-xl border border-surface-border;
+  }
+  .card-raised {
+    @apply bg-surface-raised rounded-xl border border-surface-border;
+  }
+  .section-label {
+    @apply text-xs font-semibold tracking-widest uppercase text-slate-500;
+  }
+  .stat-value {
+    @apply text-2xl font-bold text-white font-mono;
+  }
+  .rank-gold {
+    @apply text-gold font-bold;
+    text-shadow: 0 0 12px rgba(245,158,11,0.4);
+  }
+  .table-row-hover {
+    @apply transition-colors duration-150 hover:bg-surface-hover;
+  }
+  .form-badge {
+    @apply w-5 h-5 rounded-sm text-xs font-bold flex items-center justify-center;
+  }
+}
+
+@layer utilities {
+  .glow-border {
+    box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 0 20px rgba(16,185,129,0.08);
+  }
+  .gold-border {
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.35), 0 0 16px rgba(245,158,11,0.10);
+  }
+}

@@ -1,0 +1,131 @@
+import { Router } from "express"
+import { z } from "zod"
+import { query, withTransaction } from "../db/pool.js"
+import { authenticate, adminOnly } from "../middleware/auth.js"
+
+const router = Router()
+
+const FIXTURE_SELECT = `
+  SELECT
+    f.id, f.round, f.status,
+    f.scheduled_date AS date,
+    f.home_score AS "homeScore", f.away_score AS "awayScore",
+    ht.id AS "homeTeamId", ht.name AS home,
+    at.id AS "awayTeamId", at.name AS away
+  FROM fixtures f
+  JOIN teams ht ON f.home_team_id = ht.id
+  JOIN teams at ON f.away_team_id = at.id
+`
+
+// GET /api/fixtures  — all fixtures; optional ?teamId= or ?status=
+router.get("/", authenticate, async (req, res, next) => {
+  try {
+    const { teamId, status } = req.query
+    let sql = FIXTURE_SELECT
+    const params = []
+    const conds = []
+
+    if (teamId) {
+      conds.push(`(f.home_team_id = $${params.length + 1} OR f.away_team_id = $${params.length + 1})`)
+      params.push(teamId)
+    }
+    if (status) {
+      conds.push(`f.status = $${params.length + 1}`)
+      params.push(status)
+    }
+    if (conds.length) sql += " WHERE " + conds.join(" AND ")
+    sql += " ORDER BY f.scheduled_date ASC, f.round ASC"
+
+    const result = await query(sql, params)
+    res.json(result.rows)
+  } catch (err) { next(err) }
+})
+
+// GET /api/fixtures/recent  — last 5 completed (for dashboard widget)
+router.get("/recent", async (req, res, next) => {
+  try {
+    const result = await query(
+      FIXTURE_SELECT + " WHERE f.status = 'completed' ORDER BY f.scheduled_date DESC LIMIT 5"
+    )
+    res.json(result.rows)
+  } catch (err) { next(err) }
+})
+
+// POST /api/fixtures  — admin creates a fixture
+const createSchema = z.object({
+  homeTeamId: z.number().int().positive(),
+  awayTeamId: z.number().int().positive(),
+  round:      z.number().int().positive(),
+  date:       z.string(), // YYYY-MM-DD
+})
+
+router.post("/", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const { homeTeamId, awayTeamId, round, date } = createSchema.parse(req.body)
+    if (homeTeamId === awayTeamId) {
+      return res.status(400).json({ error: "Home and away teams must differ" })
+    }
+    const result = await query(`
+      INSERT INTO fixtures (home_team_id, away_team_id, round, scheduled_date)
+      VALUES ($1, $2, $3, $4) RETURNING id
+    `, [homeTeamId, awayTeamId, round, date])
+
+    const fresh = await query(FIXTURE_SELECT + " WHERE f.id = $1", [result.rows[0].id])
+    res.status(201).json(fresh.rows[0])
+  } catch (err) { next(err) }
+})
+
+// PATCH /api/fixtures/:id/result  — admin enters the score
+const resultSchema = z.object({
+  homeScore: z.number().int().min(0),
+  awayScore: z.number().int().min(0),
+})
+
+router.patch("/:id/result", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const { homeScore, awayScore } = resultSchema.parse(req.body)
+
+    await withTransaction(async ({ query: q }) => {
+      // Get the fixture first
+      const fRes = await q("SELECT * FROM fixtures WHERE id = $1 AND status = 'upcoming'", [req.params.id])
+      if (!fRes.rows[0]) throw Object.assign(new Error("Fixture not found or already completed"), { status: 404 })
+      const f = fRes.rows[0]
+
+      // Save score + mark completed
+      await q(`
+        UPDATE fixtures SET home_score = $1, away_score = $2, status = 'completed'
+        WHERE id = $3
+      `, [homeScore, awayScore, req.params.id])
+
+      // Update team W/D/L/GF/GA
+      const homeResult = homeScore > awayScore ? "win" : homeScore < awayScore ? "loss" : "draw"
+      const awayResult = homeResult === "win" ? "loss" : homeResult === "loss" ? "win" : "draw"
+
+      const statDelta = (result, scored, conceded) => ({
+        won:   result === "win"  ? 1 : 0,
+        drawn: result === "draw" ? 1 : 0,
+        lost:  result === "loss" ? 1 : 0,
+        gf: scored, ga: conceded,
+      })
+
+      for (const [teamId, res, scored, conceded] of [
+        [f.home_team_id, homeResult, homeScore, awayScore],
+        [f.away_team_id, awayResult, awayScore, homeScore],
+      ]) {
+        const d = statDelta(res, scored, conceded)
+        await q(`
+          UPDATE teams SET
+            played = played + 1,
+            won    = won + $1, drawn = drawn + $2, lost  = lost + $3,
+            gf     = gf  + $4, ga    = ga    + $5
+          WHERE id = $6
+        `, [d.won, d.drawn, d.lost, d.gf, d.ga, teamId])
+      }
+    })
+
+    const fresh = await query(FIXTURE_SELECT + " WHERE f.id = $1", [req.params.id])
+    res.json(fresh.rows[0])
+  } catch (err) { next(err) }
+})
+
+export default router
