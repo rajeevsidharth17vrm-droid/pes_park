@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs"
 import { query } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
 import { generatePlayoffs } from "../services/playoffs.js"
-import { reconcileTrophyRoster, awardOrReassignTrophy } from "../services/trophyAwards.js"
 
 const router = Router()
 
@@ -340,6 +339,7 @@ router.get("/", async (req, res, next) => {
       )
       SELECT
         t.id, t.name, t.logo_url AS "logoUrl", t.anthem_url AS "anthemUrl", t.score_points, t.created_at,
+        t.budget, t.budget - COALESCE((SELECT SUM(auction_price) FROM players WHERE team_id = t.id AND auction_price IS NOT NULL), 0) AS purse,
         COALESCE(ts.played, 0) AS played,
         COALESCE(ts.won, 0)    AS won,
         COALESCE(ts.drawn, 0)  AS drawn,
@@ -445,6 +445,7 @@ router.get("/:id", authenticate, async (req, res, next) => {
       )
       SELECT
         t.id, t.name, t.logo_url AS "logoUrl", t.anthem_url AS "anthemUrl", t.score_points, t.created_at,
+        t.budget, t.budget - COALESCE((SELECT SUM(auction_price) FROM players WHERE team_id = t.id AND auction_price IS NOT NULL), 0) AS purse,
         COALESCE(ts.played, 0) AS played,
         COALESCE(ts.won, 0)    AS won,
         COALESCE(ts.drawn, 0)  AS drawn,
@@ -698,7 +699,6 @@ router.get("/playoffs/current", async (req, res, next) => {
   try {
     const season = await getCurrentSeason()
     const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
-    res.json({ seasonNumber: season, matches: result.rows })
   } catch (err) { next(err) }
 })
 
@@ -723,7 +723,6 @@ router.post("/playoffs/generate", authenticate, adminOnly, async (req, res, next
     }
 
     const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
-    res.json({ seasonNumber: season, matches: result.rows })
   } catch (err) { next(err) }
 })
 
@@ -766,35 +765,7 @@ router.patch("/playoffs/:id/result", authenticate, adminOnly, async (req, res, n
       // Winner → Final (team2 slot), loser eliminated (3rd place)
       await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
     } else if (match.match_type === "final") {
-      // Trophy awards — re-checked EVERY time the Final's result is saved,
-      // so correcting a wrong Final result later automatically reverts the
-      // wrong team's roster and reassigns the trophy to the actual correct
-      // champion's current roster.
-      const rosterRes = await query("SELECT id FROM players WHERE team_id = $1", [winnerId])
-      await reconcileTrophyRoster({
-        sourceKey: `team_league_champion_season_${match.season_number}`,
-        trophyColumn: "trophy2_count",
-        playerIds: rosterRes.rows.map(r => r.id),
-        seasonNumber: match.season_number,
-      })
-
-      const topScorerRes = await query(`
-        SELECT p.id,
-          COALESCE(SUM(CASE WHEN mr.player_id=p.id THEN mr.player_score WHEN mr.opponent_id=p.id THEN mr.opponent_score ELSE 0 END),0) AS goals,
-          COALESCE(SUM(CASE WHEN mr.player_id=p.id THEN mr.opponent_score WHEN mr.opponent_id=p.id THEN mr.player_score ELSE 0 END),0) AS conceded
-        FROM players p
-        LEFT JOIN match_records mr ON (mr.player_id=p.id OR mr.opponent_id=p.id) AND mr.match_type='league'
-        GROUP BY p.id
-        ORDER BY goals DESC, conceded ASC
-        LIMIT 1
-      `)
-      const topScorer = topScorerRes.rows[0]
-      await awardOrReassignTrophy({
-        sourceKey: `team_league_golden_boot_season_${match.season_number}`,
-        trophyColumn: "trophy6_count",
-        playerId: topScorer?.goals > 0 ? topScorer.id : null,
-        seasonNumber: match.season_number,
-      })
+      // Final completed — champion determined
     }
 
     const fresh = await query(PLAYOFF_SELECT + " WHERE p.id = $1", [match.id])

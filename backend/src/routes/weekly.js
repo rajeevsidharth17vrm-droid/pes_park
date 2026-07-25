@@ -4,7 +4,6 @@ import { query, withTransaction } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
 import { recalcMarketValue } from "../services/marketValue.js"
 import { recalcForm } from "../services/form.js"
-import { awardOrReassignTrophy } from "../services/trophyAwards.js"
 
 const router = Router()
 
@@ -201,7 +200,6 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
 // POST /api/weekly/:id/players — set players and generate draw
 router.post("/:id/players", authenticate, adminOnly, async (req, res, next) => {
   try {
-    const { playerIds } = z.object({ playerIds: z.array(z.number().int().positive()).min(2) }).parse(req.body)
 
     // Shuffle players randomly
     const shuffled = [...playerIds].sort(() => Math.random() - 0.5)
@@ -453,32 +451,7 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
         "SELECT winner_id FROM weekly_tournament_matches WHERE tournament_id = $1 AND round = $2 AND status = 'completed'",
         [match.tournament_id, totalRounds]
       )
-      await awardOrReassignTrophy({
-        sourceKey: `weekly_champion_tournament_${match.tournament_id}`,
-        trophyColumn: "trophy3_count",
-        playerId: finalMatchRes.rows[0]?.winner_id ?? null,
-        seasonNumber: season,
-      })
 
-      const trophyGoldenBootRes = await query(`
-        SELECT p.id,
-          COALESCE(SUM(CASE WHEN mr.player_id=p.id THEN mr.player_score WHEN mr.opponent_id=p.id THEN mr.opponent_score ELSE 0 END),0) AS goals,
-          COALESCE(SUM(CASE WHEN mr.player_id=p.id THEN mr.opponent_score WHEN mr.opponent_id=p.id THEN mr.player_score ELSE 0 END),0) AS conceded
-        FROM players p
-        JOIN match_records mr ON (mr.player_id=p.id OR mr.opponent_id=p.id) AND mr.match_type='weekly'
-        JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.id
-        WHERE wtm.tournament_id = $1
-        GROUP BY p.id
-        ORDER BY goals DESC, conceded ASC
-        LIMIT 1
-      `, [match.tournament_id])
-      const weeklyTopScorer = trophyGoldenBootRes.rows[0]
-      await awardOrReassignTrophy({
-        sourceKey: `weekly_golden_boot_tournament_${match.tournament_id}`,
-        trophyColumn: "trophy5_count",
-        playerId: weeklyTopScorer?.goals > 0 ? weeklyTopScorer.id : null,
-        seasonNumber: season,
-      })
     }
 
     res.json({ updated: true, winnerId, nextRound: match.round + 1 })

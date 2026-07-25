@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Pencil, Trash2, Check, X, AlertTriangle, ChevronDown, ChevronRight, Users, KeyRound } from "lucide-react"
 import { useTeams, useDeleteTeam, useUpdateTeam, useUnassignPlayer, useChangeTeamPassword } from "../../lib/queries"
 import PlayerAvatar from "../common/PlayerAvatar"
@@ -67,6 +67,9 @@ function TeamRow({ team, players }) {
   const updateTeam                      = useUpdateTeam()
   const deleteTeam                      = useDeleteTeam()
   const changePassword                  = useChangeTeamPassword()
+
+  // Sync local state when team data updates from server
+  useEffect(() => { setName(team.name); setBudget(team.budget ?? 1000) }, [team.name, team.budget])
 
   const roster = players.filter(p => p.teamId === team.id)
 
@@ -168,7 +171,7 @@ function TeamRow({ team, players }) {
         <div className="flex items-center gap-2 flex-shrink-0">
           {editing ? (
             <>
-              <button onClick={() => { setEditing(false); setName(team.name) }}
+              <button onClick={() => { setEditing(false); setName(team.name); setBudget(team.budget ?? 1000) }}
                 className="w-7 h-7 rounded-lg border border-surface-border flex items-center justify-center text-slate-400 hover:text-white transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
