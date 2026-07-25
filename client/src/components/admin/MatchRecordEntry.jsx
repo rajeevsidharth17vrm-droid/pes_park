@@ -1,8 +1,73 @@
-import { useState } from "react"
-import { Plus, CheckCircle, ArrowRight, Trash2, Pencil, X, Save } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Plus, CheckCircle, ArrowRight, Trash2, Pencil, X, Save, Search } from "lucide-react"
 
 import { useLogRecord, useDeleteRecord, useEditRecord } from "../../lib/queries"
 import { cn } from "../../lib/utils"
+
+function SearchSelect({ value, onChange, options, placeholder = "Search…", disabled = false }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState("")
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+  const selected = options.find(o => o.value === value)
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { if (!disabled) { setOpen(!open); setSearch("") } }}
+        disabled={disabled}
+        className={cn(
+          "w-full bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-left focus:outline-none focus:border-accent/40 transition-colors",
+          disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+          selected ? "text-white" : "text-slate-500"
+        )}
+      >
+        {selected ? selected.label : placeholder}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-pitch-800 border border-surface-border rounded-xl shadow-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-surface-border">
+            <Search className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Type to search…"
+              className="w-full bg-transparent text-sm text-white placeholder-slate-600 focus:outline-none"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 && (
+              <p className="px-3 py-2 text-xs text-slate-500">No matches found</p>
+            )}
+            {filtered.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false); setSearch("") }}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-sm hover:bg-surface-hover transition-colors",
+                  o.value === value ? "text-accent font-medium" : "text-white"
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const MATCH_TYPES = [
   { value: "league", label: "Team League" },
@@ -245,11 +310,12 @@ export default function MatchRecordEntry({ players, initialRecords }) {
 
           <div>
             <label className="text-xs font-medium text-slate-400 mb-1.5 block">Player</label>
-            <select value={playerId} onChange={e => { setPlayerId(e.target.value); setOppId("") }}
-              className="w-full bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40">
-              <option value="">Select player…</option>
-              {players.map(p => <option key={p.id} value={p.id}>{p.name} ({p.team})</option>)}
-            </select>
+            <SearchSelect
+              value={playerId}
+              onChange={val => { setPlayerId(val); setOppId("") }}
+              options={players.map(p => ({ value: String(p.id), label: `${p.name} (${p.team})` }))}
+              placeholder="Search player…"
+            />
           </div>
 
           <div>
@@ -279,13 +345,13 @@ export default function MatchRecordEntry({ players, initialRecords }) {
 
           <div>
             <label className="text-xs font-medium text-slate-400 mb-1.5 block">Opponent</label>
-            <select value={oppId} onChange={e => setOppId(e.target.value)} disabled={!playerId}
-              className="w-full bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40 disabled:opacity-50">
-              <option value="">Select opponent…</option>
-              {players.filter(p => p.id !== parseInt(playerId)).map(p => (
-                <option key={p.id} value={p.id}>{p.name} ({p.team})</option>
-              ))}
-            </select>
+            <SearchSelect
+              value={oppId}
+              onChange={setOppId}
+              options={players.filter(p => p.id !== parseInt(playerId)).map(p => ({ value: String(p.id), label: `${p.name} (${p.team})` }))}
+              placeholder="Search opponent…"
+              disabled={!playerId}
+            />
           </div>
 
           {/* Optional score */}
