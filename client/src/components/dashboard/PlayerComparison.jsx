@@ -4,11 +4,11 @@ import PlayerAvatarIcon from "../common/PlayerAvatarIcon"
 import { getAvatarById } from "../../lib/avatars"
 import { cn } from "../../lib/utils"
 import ballondorTrophy    from "../../../images/ballondor.png"
-import teamLeagueTrophy   from "../../../images/Auction Tour.png"
+import teamLeagueTrophy   from "../../../images/Team League.png"
 import weeklyTrophy       from "../../../images/Weekly.png"
 import uclTrophy          from "../../../images/ucl.png"
 import goldenBootTrophy   from "../../../images/Golden Boot.png"
-import teamLeagueGBTrophy from "../../../images/auction tour_gb.png"
+import teamLeagueGBTrophy from "../../../images/team league_gb.png"
 import uclGBTrophy        from "../../../images/ucl_gb.png"
 
 const TROPHY_DEFS = [

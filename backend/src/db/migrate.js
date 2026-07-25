@@ -258,6 +258,7 @@ SELECT
   p.market_value  AS "marketValue",
   p.bdr_points    AS "bdrPoints",
   p.best_player_points AS "bestPlayerPoints",
+  p.best_player_matches AS "bestPlayerMatches",
   p.form,
   p.trophy1_count AS "trophy1Count",
   p.trophy2_count AS "trophy2Count",

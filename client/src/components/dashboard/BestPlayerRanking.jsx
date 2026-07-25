@@ -10,10 +10,14 @@ const FormDot = ({ result }) => {
 }
 
 export default function BestPlayerRanking({ players, onPlayerClick }) {
-  const sorted = [...players].sort((a, b) =>
-    (b.bestPlayerPoints - a.bestPlayerPoints) || a.name.localeCompare(b.name)
+  const withAvg = players.map(p => ({
+    ...p,
+    bpAvg: p.bestPlayerMatches > 0 ? p.bestPlayerPoints / p.bestPlayerMatches : 0
+  }))
+  const sorted = [...withAvg].sort((a, b) =>
+    (b.bpAvg - a.bpAvg) || (b.bestPlayerMatches - a.bestPlayerMatches) || a.name.localeCompare(b.name)
   )
-  const maxPts = sorted[0]?.bestPlayerPoints || 1
+  const maxAvg = sorted[0]?.bpAvg || 1
   const rankChanges = useRankChanges("best-player-ranking", sorted.map(p => p.id))
 
   return (
@@ -31,7 +35,7 @@ export default function BestPlayerRanking({ players, onPlayerClick }) {
       <div className="divide-y divide-surface-border">
         {sorted.map((player, idx) => {
           const isFirst = idx === 0
-          const barPct  = (player.bestPlayerPoints / maxPts) * 100
+          const barPct  = (player.bpAvg / maxAvg) * 100
 
           return (
             <div
@@ -96,9 +100,9 @@ export default function BestPlayerRanking({ players, onPlayerClick }) {
               {/* Points */}
               <div className="text-right flex-shrink-0">
                 <span className={cn("font-bold text-sm font-mono", isFirst ? "text-emerald-400" : "text-white")}>
-                  {player.bestPlayerPoints.toLocaleString()}
+                  {player.bpAvg.toFixed(2)}
                 </span>
-                <p className="text-xs text-slate-600 mt-0.5">pts</p>
+                <p className="text-xs text-slate-600 mt-0.5">{player.bestPlayerMatches || 0} matches</p>
               </div>
             </div>
           )

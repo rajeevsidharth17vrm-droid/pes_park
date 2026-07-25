@@ -16,7 +16,7 @@ import { query } from "../db/pool.js"
 // ── Flat delta tables ────────────────────────────────────────────────────────
 export const MV_DELTA  = { win: 15, draw: 0, loss: -10 }
 export const BDR_DELTA = { win: 5,  draw: 1, loss: -3  }
-export const BP_DELTA  = { win: 3,  draw: 1, loss: 0   }
+export const BP_DELTA  = { win: 3,  draw: 1, loss: 0 }
 
 export const MV_PER_GOAL  = 3
 export const BDR_PER_GOAL = 1
@@ -84,8 +84,8 @@ export async function recalcMarketValue(playerId) {
 }
 
 /**
- * Recalculates a player's best_player_points from ALL their match records
- * in the current season. Pure sum of flat deltas, floored at 0.
+ * Recalculates a player's best_player_points and best_player_matches
+ * from their LEAGUE (Auction Tour) match records only in the current season.
  */
 export async function recalcBestPlayer(playerId) {
   const currentSeason = await getCurrentSeason()
@@ -99,18 +99,19 @@ export async function recalcBestPlayer(playerId) {
          ELSE 'draw'
        END AS result
      FROM match_records
-     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
+     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2 AND match_type = 'league'`,
     [playerId, currentSeason]
   )
 
   let totalBp = 0
+  const totalMatches = matchesRes.rows.length
   for (const m of matchesRes.rows) {
     totalBp += matchBpDelta(m.result)
   }
 
   await query(
-    "UPDATE players SET best_player_points = COALESCE($1, 0) WHERE id = $2",
-    [Math.max(0, totalBp), playerId]
+    "UPDATE players SET best_player_points = COALESCE($1, 0), best_player_matches = COALESCE($2, 0) WHERE id = $3",
+    [totalBp, totalMatches, playerId]
   )
 }
 

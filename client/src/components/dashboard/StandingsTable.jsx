@@ -84,11 +84,11 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
         <div className="flex items-center gap-3">
           <img
             src={view === "scorers" ? goldenBoot : teamLeagueTrophy}
-            alt={view === "scorers" ? "Golden Boot" : "Team League"}
+            alt={view === "scorers" ? "Golden Boot" : "Auction Tour"}
             className="w-9 h-9 object-contain flex-shrink-0"
           />
           <div>
-            <p className="section-label mb-0.5">League table</p>
+            <p className="section-label mb-0.5">Auction Tour</p>
             <h2 className="text-base font-semibold text-white">
               {view === "table" ? "Season standings" : view === "fixtures" ? "Fixtures" : view === "playoffs" ? "Playoffs" : "Golden Boot"}
             </h2>
@@ -99,7 +99,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
           onChange={e => setView(e.target.value)}
           className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
         >
-          <option value="table">League table</option>
+          <option value="table">Auction Tour</option>
           <option value="fixtures">Fixtures</option>
           <option value="playoffs">Playoffs</option>
           <option value="scorers">Golden Boot</option>
@@ -188,7 +188,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                 <div className="flex items-center justify-center gap-2 mb-6 text-gold">
                   <Trophy className="w-5 h-5" />
                   <span className="font-bold text-lg">{championName}</span>
-                  <span className="text-sm text-slate-400">are Team League Champions!</span>
+                  <span className="text-sm text-slate-400">are Auction Tour Champions!</span>
                 </div>
               )}
               <div className="flex flex-col items-center gap-6">
@@ -226,7 +226,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
         })()
       )}
 
-      {/* League Table View */}
+      {/* Auction Tour View */}
       {view === "table" && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

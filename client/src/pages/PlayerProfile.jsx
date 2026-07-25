@@ -78,11 +78,11 @@ import PerformanceZones from "../components/dashboard/PerformanceZones"
 function TrophyCase({ player }) {
   const trophies = [
     { image: ballondorTrophy,    label: "Ballon d'Or",             count: player.trophy1Count ?? 0 },
-    { image: teamLeagueTrophy,   label: "Team League",             count: player.trophy2Count ?? 0 },
-    { image: uclTrophy,          label: "UCL",                     count: player.trophy4Count ?? 0 },
-    { image: weeklyTrophy,       label: "Weekly",                  count: player.trophy3Count ?? 0 },
+    { image: teamLeagueTrophy,   label: "Auction Tour",             count: player.trophy2Count ?? 0 },
+    { image: uclTrophy,          label: "Solo Tour",                     count: player.trophy4Count ?? 0 },
+    { image: weeklyTrophy,       label: "Weekend Series",                  count: player.trophy3Count ?? 0 },
     { image: goldenBootTrophy,   label: "Weekly Golden Boot",      count: player.trophy5Count ?? 0 },
-    { image: teamLeagueGBTrophy, label: "Team League Golden Boot", count: player.trophy6Count ?? 0 },
+    { image: teamLeagueGBTrophy, label: "Auction Tour Golden Boot", count: player.trophy6Count ?? 0 },
     { image: uclGBTrophy,        label: "UCL Golden Boot",         count: player.trophy7Count ?? 0 },
   ]
 
