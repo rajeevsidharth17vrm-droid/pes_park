@@ -646,7 +646,7 @@ router.post("/season-reset", authenticate, adminOnly, async (req, res, next) => 
 router.post("/season-delete", authenticate, adminOnly, async (req, res, next) => {
   try {
     const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const current = parseInt(seasonRes.rows[0]?.value || "6")
+    const current = parseInt(seasonRes.rows[0]?.value || "1")
     if (current <= 1) {
       return res.status(400).json({ error: "Already at Season 1 — nothing to go back to" })
     }

@@ -56,7 +56,7 @@ app.get("/api/settings", async (_req, res) => {
     const settings = Object.fromEntries(result.rows.map(r => [r.key, r.value]))
     res.json(settings)
   } catch (err) {
-    res.json({ current_season: "6" })
+    res.json({ current_season: "1" })
   }
 })
 

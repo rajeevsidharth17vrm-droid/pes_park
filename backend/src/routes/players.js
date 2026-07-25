@@ -413,7 +413,7 @@ router.get("/:id/compare-stats", async (req, res, next) => {
 router.get("/:id/performance-zones", async (req, res, next) => {
   try {
     const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const currentSeason = parseInt(seasonRes.rows[0]?.value || "6")
+    const currentSeason = parseInt(seasonRes.rows[0]?.value || "1")
     const seasonParam   = req.query.season ?? "current"
 
     // All seasons this player has ever played in — for the dropdown

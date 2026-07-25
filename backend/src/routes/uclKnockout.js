@@ -283,7 +283,7 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
     const oldMatchRecordId = match.match_record_id
 
     const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const season = parseInt(seasonRes.rows[0]?.value || "6")
+    const season = parseInt(seasonRes.rows[0]?.value || "1")
     const oppGradeRes = await query("SELECT grade FROM players WHERE id = $1", [match.player2_id])
     const oppGrade = oppGradeRes.rows[0]?.grade || "C"
 

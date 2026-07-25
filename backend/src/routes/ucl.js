@@ -217,7 +217,7 @@ router.patch("/fixtures/:id", authenticate, adminOnly, async (req, res, next) =>
     const oldMatchRecordId = fix.match_record_id
 
     const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const season = parseInt(seasonRes.rows[0]?.value || "6")
+    const season = parseInt(seasonRes.rows[0]?.value || "1")
     const oppGradeRes = await query("SELECT grade FROM players WHERE id = $1", [fix.player2_id])
     const oppGrade = oppGradeRes.rows[0]?.grade || "C"
 
@@ -532,7 +532,7 @@ router.get("/standings", async (req, res, next) => {
 router.get("/top-scorers", async (req, res, next) => {
   try {
     const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const season = parseInt(seasonRes.rows[0]?.value || "6")
+    const season = parseInt(seasonRes.rows[0]?.value || "1")
     const result = await query(`
       SELECT
         p.id,

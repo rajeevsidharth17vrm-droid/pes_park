@@ -25,7 +25,7 @@ export const BP_PER_GOAL  = 0  // goals don't count for best player (counted in 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 async function getCurrentSeason() {
   const r = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-  return parseInt(r.rows[0]?.value || "6")
+  return parseInt(r.rows[0]?.value || "1")
 }
 
 /**
