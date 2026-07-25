@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "https://tamil-efootballers.onrender.com/api",
+  baseURL: import.meta.env.VITE_API_URL || "https://pes-park.onrender.com/api",
   timeout: 15000, // 15s — prevents requests hanging forever on Render cold starts
 })
 

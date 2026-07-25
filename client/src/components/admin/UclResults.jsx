@@ -201,7 +201,7 @@ function RoundExportCard({ round, byGroup, exportRef, visible }) {
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, position: "relative" }}>
         <img src={logoUrl} alt="TEC" style={{ width: 44, height: 44, objectFit: "contain" }} />
         <div>
-          <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>Tamil Efootballers · UCL Group Stage</p>
+          <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>Pes Park · Solo Tour Group Stage</p>
           <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Round {round} Fixtures</p>
         </div>
       </div>
@@ -235,7 +235,7 @@ function RoundExportCard({ round, byGroup, exportRef, visible }) {
       </div>
 
       <p style={{ color: "#1e293b", fontSize: 10, textAlign: "right", marginTop: 16, margin: "16px 0 0 0" }}>
-        tamil-efootballers.vercel.app
+        pes-park-opal.vercel.app
       </p>
     </div>
   )

@@ -8,7 +8,7 @@ const YEARS = Array.from({ length: 8 }, (_, i) => CURRENT_YEAR - 2 + i)
 
 const EMPTY = {
   seasonNumber: "", seasonName: "", year: String(CURRENT_YEAR),
-  customAwards: [{ title: "", winner: "" }],
+  customAwards: [{ title: "", winner: "", runner: "" }],
   teamLeagueWinner: "",
   teamLeaguePlayers: [""],
   notes: ""
@@ -39,12 +39,12 @@ function parseCustomAwards(record) {
   if (record.champion_team) awards.push({ title: "Champion Team", winner: `${record.champion_team}${record.champion_pts ? ` (${record.champion_pts} pts)` : ""}` })
   if (record.ballondor_winner) awards.push({ title: "Ballon d'Or", winner: record.ballondor_winner })
   if (record.top_scorer) awards.push({ title: "Golden Boot", winner: `${record.top_scorer}${record.top_scorer_goals ? ` (${record.top_scorer_goals} goals)` : ""}` })
-  if (record.ucl_winner) awards.push({ title: "UCL Winner", winner: record.ucl_winner })
+  if (record.ucl_winner) awards.push({ title: "Solo Tour Winner", winner: record.ucl_winner })
   if (record.highest_mv_player) awards.push({ title: "Highest MV", winner: `${record.highest_mv_player}${record.highest_mv ? ` (MV ${record.highest_mv})` : ""}` })
   if (record.longest_streak_player) awards.push({ title: "Longest Win Streak", winner: `${record.longest_streak_player}${record.longest_streak ? ` (${record.longest_streak} wins)` : ""}` })
   const weeklyWinners = Array.isArray(record.weekly_winners) ? record.weekly_winners.filter(Boolean) : []
   weeklyWinners.forEach((w, i) => awards.push({ title: `Weekly ${i + 1} Winner`, winner: w }))
-  return awards.length > 0 ? awards : [{ title: "", winner: "" }]
+  return awards.length > 0 ? awards : [{ title: "", winner: "", runner: "" }]
 }
 
 function SeasonForm({ initial = EMPTY, onSave, onCancel, saving }) {
@@ -55,7 +55,7 @@ function SeasonForm({ initial = EMPTY, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
     ...EMPTY,
     ...initial,
-    customAwards: initAwards.length > 0 ? initAwards : [{ title: "", winner: "" }],
+    customAwards: initAwards.length > 0 ? initAwards : [{ title: "", winner: "", runner: "" }],
     teamLeaguePlayers: initial.teamLeaguePlayers?.length ? initial.teamLeaguePlayers : [""]
   })
   const set = (key) => (val) => setForm(f => ({ ...f, [key]: val }))
@@ -67,7 +67,7 @@ function SeasonForm({ initial = EMPTY, onSave, onCancel, saving }) {
   }
 
   function addAward() {
-    setForm(f => ({ ...f, customAwards: [...f.customAwards, { title: "", winner: "" }] }))
+    setForm(f => ({ ...f, customAwards: [...f.customAwards, { title: "", winner: "", runner: "" }] }))
   }
 
   function removeAward(idx) {
@@ -94,29 +94,40 @@ function SeasonForm({ initial = EMPTY, onSave, onCancel, saving }) {
       {/* Dynamic Awards */}
       <div className="border-t border-surface-border pt-3">
         <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-3">Awards & Winners</p>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {form.customAwards.map((award, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={award.title}
-                onChange={e => updateAward(idx, "title", e.target.value)}
-                placeholder="Title (e.g. UCL Winner)"
-                className="flex-1 bg-pitch-900 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
-              />
-              <input
-                type="text"
-                value={award.winner}
-                onChange={e => updateAward(idx, "winner", e.target.value)}
-                placeholder="Winner name"
-                className="flex-1 bg-pitch-900 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
-              />
-              {form.customAwards.length > 1 && (
-                <button
-                  onClick={() => removeAward(idx)}
-                  className="text-slate-600 hover:text-rose-400 transition-colors px-1 flex-shrink-0"
-                >✕</button>
-              )}
+            <div key={idx} className="bg-pitch-800 border border-surface-border rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={award.title}
+                  onChange={e => updateAward(idx, "title", e.target.value)}
+                  placeholder="Title (e.g. Solo Tour Winner)"
+                  className="flex-1 bg-pitch-900 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+                />
+                {form.customAwards.length > 1 && (
+                  <button
+                    onClick={() => removeAward(idx)}
+                    className="text-slate-600 hover:text-rose-400 transition-colors px-1 flex-shrink-0"
+                  >✕</button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={award.winner}
+                  onChange={e => updateAward(idx, "winner", e.target.value)}
+                  placeholder="🥇 Winner"
+                  className="bg-pitch-900 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={award.runner || ""}
+                  onChange={e => updateAward(idx, "runner", e.target.value)}
+                  placeholder="🥈 Runner-up"
+                  className="bg-pitch-900 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+                />
+              </div>
             </div>
           ))}
           <button
@@ -128,10 +139,10 @@ function SeasonForm({ initial = EMPTY, onSave, onCancel, saving }) {
         </div>
       </div>
 
-      {/* Team League — team name + squad players */}
+      {/* Auction Tour — team name + squad players */}
       <div className="border-t border-surface-border pt-3">
         <div className="bg-pitch-800 border border-surface-border rounded-xl p-4">
-          <p className="text-xs text-slate-400 font-semibold mb-3">Team League Winner</p>
+          <p className="text-xs text-slate-400 font-semibold mb-3">Auction Tour Winner</p>
           <Field label="Winning Team Name" value={form.teamLeagueWinner} onChange={set("teamLeagueWinner")} placeholder="Japan" />
           <div className="mt-3">
             <p className="text-xs text-slate-500 font-medium mb-2">Squad Players</p>
@@ -241,19 +252,22 @@ function SeasonCard({ record, onEdit, onDelete }) {
               <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">Awards</p>
               <div className="space-y-1.5">
                 {awards.filter(a => a.title && a.winner).map((a, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
+                  <div key={i} className="flex items-center justify-between text-sm py-1">
                     <span className="text-slate-400">{a.title}</span>
-                    <span className="font-semibold text-white">{a.winner}</span>
+                    <div className="text-right">
+                      <span className="font-semibold text-white">{a.winner}</span>
+                      {a.runner && <span className="text-slate-500 text-xs ml-2">/ {a.runner}</span>}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Team League */}
+          {/* Auction Tour */}
           {record.team_league_winner && (
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Team League</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Auction Tour</p>
               <p className="text-sm font-semibold text-white">{record.team_league_winner}</p>
               {squadPlayers.length > 0 && (
                 <p className="text-xs text-slate-500 mt-0.5">Squad: {squadPlayers.join(", ")}</p>

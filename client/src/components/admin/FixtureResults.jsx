@@ -490,7 +490,7 @@ function FixtureExportCard({ round, fixtures, exportRef, visible }) {
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, position: "relative" }}>
         <img src={logoUrl} alt="TEC" style={{ width: 44, height: 44, objectFit: "contain" }} />
         <div>
-          <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>Tamil Efootballers · Team League</p>
+          <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>Pes Park · Auction Tour</p>
           <p style={{ color: "#ffffff", fontSize: 22, fontWeight: 800, margin: 0 }}>Round {round} Fixtures</p>
         </div>
       </div>
@@ -540,7 +540,7 @@ function FixtureExportCard({ round, fixtures, exportRef, visible }) {
         ))}
       </div>
 
-      <p style={{ color: "#1e293b", fontSize: 10, textAlign: "right", marginTop: 20 }}>tamil-efootballers.vercel.app</p>
+      <p style={{ color: "#1e293b", fontSize: 10, textAlign: "right", marginTop: 20 }}>pes-park-opal.vercel.app</p>
     </div>
   )
 }

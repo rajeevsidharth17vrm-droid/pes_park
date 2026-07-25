@@ -3,7 +3,7 @@ import { Trophy, Target, ArrowRight, Crown } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { useSeasonMatchRecords } from "../../lib/queries"
 import ballondorImg  from "../../../images/ballondor.png"
-import teamLeagueImg from "../../../images/Team League.png"
+import teamLeagueImg from "../../../images/Auction Tour.png"
 import weeklyImg     from "../../../images/Weekly.png"
 import uclImg        from "../../../images/ucl.png"
 
@@ -113,7 +113,7 @@ export default function PastSeasonDashboard({ record, season }) {
                 <div className="px-5 py-3">
                   <div className="flex items-center gap-3 mb-1">
                     <img src={teamLeagueImg} alt="TL" className="w-8 h-8 object-contain flex-shrink-0" />
-                    <div><p className="text-xs text-slate-500">Team League</p><p className="text-sm font-semibold text-white">{record.team_league_winner}</p></div>
+                    <div><p className="text-xs text-slate-500">Auction Tour</p><p className="text-sm font-semibold text-white">{record.team_league_winner}</p></div>
                   </div>
                   {squadPlayers.length > 0 && (
                     <p className="text-xs text-slate-500 pl-11">Squad: {squadPlayers.join(", ")}</p>
@@ -122,15 +122,15 @@ export default function PastSeasonDashboard({ record, season }) {
               )}
               {record.ucl_winner && (
                 <div className="flex items-center gap-3 px-5 py-3">
-                  <img src={uclImg} alt="UCL" className="w-8 h-8 object-contain flex-shrink-0" />
+                  <img src={uclImg} alt="Solo Tour" className="w-8 h-8 object-contain flex-shrink-0" />
                   <div><p className="text-xs text-slate-500">UCL</p><p className="text-sm font-semibold text-white">{record.ucl_winner}</p></div>
                 </div>
               )}
               {weeklyWinners.length > 0 && (
                 <div className="px-5 py-3">
                   <div className="flex items-center gap-3 mb-2">
-                    <img src={weeklyImg} alt="Weekly" className="w-8 h-8 object-contain flex-shrink-0" />
-                    <p className="text-xs text-slate-500 font-semibold">Weekly Trophy</p>
+                    <img src={weeklyImg} alt="Weekend Series" className="w-8 h-8 object-contain flex-shrink-0" />
+                    <p className="text-xs text-slate-500 font-semibold">Weekend Series Trophy</p>
                   </div>
                   <div className="pl-11 space-y-1">
                     {weeklyWinners.map((w, i) => (

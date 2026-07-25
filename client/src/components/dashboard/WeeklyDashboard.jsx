@@ -47,7 +47,7 @@ export default function WeeklyDashboard({ onPlayerClick }) {
     return (
       <div className="card px-6 py-14 text-center">
         <Trophy className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-400 font-medium">No Weekly Tournament yet</p>
+        <p className="text-slate-400 font-medium">No Weekend Series yet</p>
         <p className="text-sm text-slate-600 mt-1">Check back once the admin starts one</p>
       </div>
     )
@@ -64,11 +64,11 @@ export default function WeeklyDashboard({ onPlayerClick }) {
         <div className="flex items-center gap-3">
           <img
             src={view === "fixtures" ? weeklyLogo : goldenBootLogo}
-            alt={view === "fixtures" ? "Weekly Tournament" : "Golden Boot"}
+            alt={view === "fixtures" ? "Weekend Series" : "Golden Boot"}
             className="w-9 h-9 object-contain flex-shrink-0"
           />
           <div>
-            <p className="section-label mb-0.5">Weekly Tournament</p>
+            <p className="section-label mb-0.5">Weekend Series</p>
             <h2 className="text-base font-semibold text-white">
               {view === "fixtures" ? tournament.name : "Top Scorers"}
             </h2>

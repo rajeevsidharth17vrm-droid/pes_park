@@ -5,7 +5,7 @@ import Layout from "../components/layout/Layout"
 import Loading from "../components/common/Loading"
 import { useSeasonRecords, useLeagueInfo } from "../lib/queries"
 import { cn } from "../lib/utils"
-import teamLeagueImg from "../../images/Team League.png"
+import teamLeagueImg from "../../images/Auction Tour.png"
 
 function parseCustomAwards(record) {
   if (record.custom_awards && Array.isArray(record.custom_awards) && record.custom_awards.length > 0) {
@@ -15,7 +15,7 @@ function parseCustomAwards(record) {
   if (record.champion_team) awards.push({ title: "Champion Team", winner: `${record.champion_team}${record.champion_pts ? ` (${record.champion_pts} pts)` : ""}` })
   if (record.ballondor_winner) awards.push({ title: "Ballon d'Or", winner: record.ballondor_winner })
   if (record.top_scorer) awards.push({ title: "Golden Boot", winner: `${record.top_scorer}${record.top_scorer_goals ? ` (${record.top_scorer_goals} goals)` : ""}` })
-  if (record.ucl_winner) awards.push({ title: "UCL Winner", winner: record.ucl_winner })
+  if (record.ucl_winner) awards.push({ title: "Solo Tour Winner", winner: record.ucl_winner })
   if (record.highest_mv_player) awards.push({ title: "Highest MV", winner: `${record.highest_mv_player}${record.highest_mv ? ` (MV ${record.highest_mv})` : ""}` })
   if (record.longest_streak_player) awards.push({ title: "Longest Win Streak", winner: `${record.longest_streak_player}${record.longest_streak ? ` (${record.longest_streak} wins)` : ""}` })
   const weeklyWinners = Array.isArray(record.weekly_winners) ? record.weekly_winners.filter(Boolean) : []
@@ -43,20 +43,23 @@ function SeasonDetail({ record }) {
                   <Trophy className="w-4 h-4 text-gold flex-shrink-0" />
                   <p className="text-xs text-slate-500">{a.title}</p>
                 </div>
-                <p className="text-sm font-semibold text-white">{a.winner}</p>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-white">{a.winner}</p>
+                  {a.runner && <p className="text-xs text-slate-500">Runner-up: {a.runner}</p>}
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Team League */}
+      {/* Auction Tour */}
       {record.team_league_winner && (
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-surface-border flex items-center gap-3">
-            <img src={teamLeagueImg} alt="Team League" className="w-7 h-7 object-contain" />
+            <img src={teamLeagueImg} alt="Auction Tour" className="w-7 h-7 object-contain" />
             <div>
-              <p className="text-xs text-slate-500">Team League Champions</p>
+              <p className="text-xs text-slate-500">Auction Tour Champions</p>
               <p className="text-sm font-bold text-white">{record.team_league_winner}</p>
             </div>
           </div>
@@ -95,11 +98,11 @@ export default function HallOfFame() {
     <Layout>
       <div className="max-w-3xl mx-auto px-4 py-6">
         <button onClick={() => navigate("/")}
-          className="flex items-center gap-1.5 text-slate-500 hover:text-white text-sm mb-5 transition-colors">
+          className="flex items-center gap-1.5 text-slate-500 hover:text-white text-sm mb-5 transition-colors mx-auto">
           <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </button>
 
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex flex-col items-center gap-3 mb-6 text-center">
           <Trophy className="w-7 h-7 text-gold" />
           <div>
             <h1 className="text-xl font-extrabold text-white">Hall of Fame</h1>

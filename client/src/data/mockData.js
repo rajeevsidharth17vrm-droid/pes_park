@@ -69,7 +69,7 @@ export const recentFixtures = [
 ]
 
 export const leagueInfo = {
-  name: "Tamil Esports League",
+  name: "Pes Park League",
   season: "Season 1 · 2024–25",
   totalRounds: 14,
   currentRound: 14,

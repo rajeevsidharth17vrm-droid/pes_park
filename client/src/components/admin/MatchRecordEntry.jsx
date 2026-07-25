@@ -70,9 +70,9 @@ function SearchSelect({ value, onChange, options, placeholder = "Search…", dis
 }
 
 const MATCH_TYPES = [
-  { value: "league", label: "Team League" },
-  { value: "ucl",    label: "UCL"         },
-  { value: "weekly", label: "Weekly"      },
+  { value: "league", label: "Auction Tour" },
+  { value: "ucl",    label: "Solo Tour"         },
+  { value: "weekly", label: "Weekend Series"      },
   { value: "quick",  label: "Quick Tournament" },
 ]
 

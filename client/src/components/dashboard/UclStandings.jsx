@@ -74,7 +74,7 @@ export default function UclStandings({ onPlayerClick }) {
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src={headerIcon} alt="UCL" className="w-9 h-9 object-contain flex-shrink-0" />
+          <img src={headerIcon} alt="Solo Tour" className="w-9 h-9 object-contain flex-shrink-0" />
           <div>
             <p className="section-label mb-0.5">UCL</p>
             <h2 className="text-base font-semibold text-white">{headerTitle}</h2>
@@ -235,7 +235,7 @@ export default function UclStandings({ onPlayerClick }) {
         !knockout || (knockout.matches || []).length === 0 ? (
           <div className="px-5 py-10 text-center">
             <Swords className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">UCL Knockout hasn't started yet</p>
+            <p className="text-sm text-slate-500">Solo Tour Knockout hasn't started yet</p>
           </div>
         ) : (
           <>

@@ -440,9 +440,9 @@ router.get("/:id/performance-zones", async (req, res, next) => {
           CASE WHEN mr.player_id=$1 THEN mr.opponent_score ELSE mr.player_score  END AS goals_conceded,
           mr.recorded_at,
           CASE mr.match_type::text
-            WHEN 'league' THEN CONCAT('TL R', COALESCE(f.round::text, '?'))
-            WHEN 'ucl'    THEN 'UCL'
-            WHEN 'weekly' THEN COALESCE(wt.name, 'Weekly')
+            WHEN 'league' THEN CONCAT('AT R', COALESCE(f.round::text, '?'))
+            WHEN 'ucl'    THEN 'Solo Tour'
+            WHEN 'weekly' THEN COALESCE(wt.name, 'Weekend Series')
             WHEN 'quick'  THEN COALESCE(qt.name, 'Quick Tournament')
             ELSE mr.match_type::text
           END AS label

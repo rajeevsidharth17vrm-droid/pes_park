@@ -32,7 +32,7 @@ function ResetMVCard() {
   async function handleReset() {
     setLoading(true)
     try {
-      await fetch(`${import.meta.env.VITE_API_URL || "https://tamil-efootballers.onrender.com/api"}/players/reset-mv`, {
+      await fetch(`${import.meta.env.VITE_API_URL || "https://pes-park.onrender.com/api"}/players/reset-mv`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`,
@@ -260,10 +260,10 @@ const TABS = [
   { id: "overview",   label: "Overview",     icon: LayoutDashboard },
   { id: "players",    label: "Players",      icon: Users           },
   { id: "records",    label: "Match records", icon: Activity       },
-  { id: "uclgroups",    label: "UCL Groups",    icon: Trophy },
-  { id: "uclresults",   label: "UCL Results",   icon: Trophy },
-  { id: "uclknockout",  label: "UCL Knockout",  icon: Trophy },
-  { id: "weekly",     label: "Weekly",       icon: Trophy          },
+  { id: "uclgroups",    label: "Solo Tour Groups",    icon: Trophy },
+  { id: "uclresults",   label: "Solo Tour Results",   icon: Trophy },
+  { id: "uclknockout",  label: "Solo Tour Knockout",  icon: Trophy },
+  { id: "weekly",     label: "Weekend Series",       icon: Trophy          },
   { id: "quicktournament", label: "Quick Tournament", icon: Trophy  },
   { id: "fixtures",   label: "Fixtures",     icon: Calendar        },
   { id: "teamresults",label: "Team Results", icon: Users           },

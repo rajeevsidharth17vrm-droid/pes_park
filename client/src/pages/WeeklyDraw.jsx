@@ -67,8 +67,8 @@ export default function WeeklyDraw() {
       <div className="flex items-center gap-3 mb-10">
         <Trophy className="w-8 h-8 text-accent" />
         <div>
-          <p className="text-xs text-slate-500 uppercase tracking-widest">Tamil Efootballers</p>
-          <p className="text-xl font-extrabold text-white">{tournament?.name || "Weekly Tournament"}</p>
+          <p className="text-xs text-slate-500 uppercase tracking-widest">Pes Park</p>
+          <p className="text-xl font-extrabold text-white">{tournament?.name || "Weekend Series"}</p>
         </div>
       </div>
 

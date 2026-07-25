@@ -4,21 +4,21 @@ import PlayerAvatarIcon from "../common/PlayerAvatarIcon"
 import { getAvatarById } from "../../lib/avatars"
 import { cn } from "../../lib/utils"
 import ballondorTrophy    from "../../../images/ballondor.png"
-import teamLeagueTrophy   from "../../../images/Team League.png"
+import teamLeagueTrophy   from "../../../images/Auction Tour.png"
 import weeklyTrophy       from "../../../images/Weekly.png"
 import uclTrophy          from "../../../images/ucl.png"
 import goldenBootTrophy   from "../../../images/Golden Boot.png"
-import teamLeagueGBTrophy from "../../../images/team league_gb.png"
+import teamLeagueGBTrophy from "../../../images/auction tour_gb.png"
 import uclGBTrophy        from "../../../images/ucl_gb.png"
 
 const TROPHY_DEFS = [
   { key: "trophy1_count", image: ballondorTrophy,    label: "Ballon d'Or"   },
-  { key: "trophy2_count", image: teamLeagueTrophy,   label: "Team League"   },
-  { key: "trophy4_count", image: uclTrophy,          label: "UCL"           },
-  { key: "trophy3_count", image: weeklyTrophy,       label: "Weekly"        },
+  { key: "trophy2_count", image: teamLeagueTrophy,   label: "Auction Tour"   },
+  { key: "trophy4_count", image: uclTrophy,          label: "Solo Tour"           },
+  { key: "trophy3_count", image: weeklyTrophy,       label: "Weekend Series"        },
   { key: "trophy5_count", image: goldenBootTrophy,   label: "Wkly GB"       },
   { key: "trophy6_count", image: teamLeagueGBTrophy, label: "TL GB"         },
-  { key: "trophy7_count", image: uclGBTrophy,        label: "UCL GB"        },
+  { key: "trophy7_count", image: uclGBTrophy,        label: "ST GB"        },
 ]
 
 function resolveAvatar(p) {
@@ -220,11 +220,11 @@ export default function PlayerComparison({ onPlayerClick }) {
             <StatBar label="League Wins"   a={sA.leagueWins} b={sB.leagueWins} />
             <StatBar label="League Draws"  a={sA.leagueDraws} b={sB.leagueDraws} />
             <StatBar label="League Losses" a={sA.leagueLosses} b={sB.leagueLosses} higherIsBetter={false} />
-            <StatBar label="UCL Wins"      a={sA.uclWins}    b={sB.uclWins}    />
-            <StatBar label="UCL Draws"     a={sA.uclDraws}   b={sB.uclDraws}   />
-            <StatBar label="UCL Losses"    a={sA.uclLosses}  b={sB.uclLosses}  higherIsBetter={false} />
+            <StatBar label="Solo Tour Wins"      a={sA.uclWins}    b={sB.uclWins}    />
+            <StatBar label="Solo Tour Draws"     a={sA.uclDraws}   b={sB.uclDraws}   />
+            <StatBar label="Solo Tour Losses"    a={sA.uclLosses}  b={sB.uclLosses}  higherIsBetter={false} />
             <StatBar label="Weekly Wins"   a={sA.weeklyWins} b={sB.weeklyWins} />
-            <StatBar label="Weekly Draws"  a={sA.weeklyDraws} b={sB.weeklyDraws} />
+            <StatBar label="Weekend Series Draws"  a={sA.weeklyDraws} b={sB.weeklyDraws} />
             <StatBar label="Weekly Losses" a={sA.weeklyLosses} b={sB.weeklyLosses} higherIsBetter={false} />
             <StatBar label="Quick Tournament Wins"   a={sA.quickWins} b={sB.quickWins} />
             <StatBar label="Quick Tournament Draws"  a={sA.quickDraws} b={sB.quickDraws} />

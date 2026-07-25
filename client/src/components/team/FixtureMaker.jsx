@@ -318,7 +318,7 @@ function FixtureCard({ fixture, myTeamName, myPlayers, allPlayers, teamLogoUrl, 
       ctx.fillStyle = "#475569"
       ctx.font      = "11px system-ui, sans-serif"
       ctx.textAlign = "center"
-      ctx.fillText("tamil-efootballers.vercel.app", width / 2, height - footerH + 26)
+      ctx.fillText("pes-park-opal.vercel.app", width / 2, height - footerH + 26)
     }
 
     function drawWithLogo() {

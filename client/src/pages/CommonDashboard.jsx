@@ -18,6 +18,9 @@ import PlayerComparison from "../components/dashboard/PlayerComparison"
 import TeamsDirectory from "../components/dashboard/TeamsDirectory"
 import Loading from "../components/common/Loading"
 import CountUp from "../components/common/CountUp"
+import ChampionCelebration from "../components/common/ChampionCelebration"
+import weeklyTrophyLogo from "../../images/Weekly.png"
+import uclTrophyLogo from "../../images/ucl.png"
 import goldenBootLogo from "../../images/Golden Boot.png"
 import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs } from "../lib/queries"
 
@@ -68,7 +71,7 @@ const GoldenBootBadge = ({ scorer }) => {
   )
 }
 
-// Player chips for the Team League celebration — captain and best performer
+// Player chips for the Auction Tour celebration — captain and best performer
 // appear plain at first, then a beat after the card has landed, their chips
 // visibly transition into their highlighted gold/emerald styling, as a
 // distinct "reveal" moment rather than being static from the start.
@@ -142,8 +145,8 @@ function TeamRosterChips({ players, bestPerformerId, delay = 3000 }) {
 
 const PANEL_OPTIONS = [
   { value: "standings",  label: "League table"    },
-  { value: "ucl",        label: "UCL"             },
-  { value: "weekly",     label: "Weekly"          },
+  { value: "ucl",        label: "Solo Tour"             },
+  { value: "weekly",     label: "Weekend Series"          },
   { value: "quick",      label: "Quick Tournament" },
 ]
 
@@ -164,7 +167,7 @@ export default function CommonDashboard() {
 
   const urlParams = new URLSearchParams(window.location.search)
 
-  // ── Weekly Tournament champion celebration ──────────────────────────────
+  // ── Weekend Series champion celebration ──────────────────────────────
   // Site-wide, once-per-visitor — fires on whatever page/view the visitor
   // lands on, tracked in localStorage per tournament so it doesn't replay
   // on repeat visits from the same browser.
@@ -279,7 +282,7 @@ export default function CommonDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickChampion, quickTournament?.id])
 
-  // ── Team League champion celebration ────────────────────────────────────
+  // ── Auction Tour champion celebration ────────────────────────────────────
   // Fires once the PLAYOFF FINAL is completed — NOT when regular-season
   // fixtures finish (that moment only generates the playoff bracket; the
   // actual champion isn't decided until the Final itself is played).
@@ -352,8 +355,8 @@ export default function CommonDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamChampion?.id, teamCelebrationSeason, teamsLoading, playersLoading])
 
-  // ── UCL Knockout champion celebration ───────────────────────────────────
-  // Fires once the UCL Knockout Final is completed — mirrors the Weekly
+  // ── Solo Tour Knockout champion celebration ───────────────────────────────────
+  // Fires once the Solo Tour Knockout Final is completed — mirrors the Weekly
   // Tournament celebration exactly, just reading from ucl-knockout instead.
   const [showUclCelebration, setShowUclCelebration] = useState(false)
   const uclFinalMatch = uclKnockout?.matches?.find(
@@ -410,7 +413,7 @@ export default function CommonDashboard() {
   }, [uclChampion, uclKnockout?.id])
 
   // ── Ballon d'Or celebration ──────────────────────────────────────────────
-  // Fires immediately after the UCL Champion celebration finishes (whether
+  // Fires immediately after the Solo Tour Champion celebration finishes (whether
   // dismissed by timeout or click) — a sequential "part 2" reveal, not a
   // simultaneous one, since both trigger from the same UCL Final moment.
   // Winner = whoever has the highest total BDR points at that instant,
@@ -553,6 +556,29 @@ export default function CommonDashboard() {
 
   return (
     <Layout>
+      {showWeeklyCelebration && displayWeeklyChampion ? (
+        <ChampionCelebration
+          trophyImage={weeklyTrophyLogo}
+          eyebrow="Weekend Series"
+          title={displayWeeklyChampion}
+          subtitle="is the Weekend Series Champion! 🎉"
+          badgeImage={displayWeeklyChampionAvatar.thumb}
+          bgImage={displayWeeklyChampionAvatar.bg}
+        >
+          {weeklyGoldenBoot && <GoldenBootBadge scorer={weeklyGoldenBoot} />}
+        </ChampionCelebration>
+      ) : showUclCelebration && displayUclChampion ? (
+        <ChampionCelebration
+          trophyImage={uclTrophyLogo}
+          eyebrow="Solo Tour"
+          title={displayUclChampion}
+          subtitle="is the Solo Tour Champion! 🏆"
+          badgeImage={displayUclChampionAvatar.thumb}
+          bgImage={displayUclChampionAvatar.bg}
+        >
+          {uclGoldenBoot && <GoldenBootBadge scorer={uclGoldenBoot} />}
+        </ChampionCelebration>
+      ) : null}
 
       {/* Hero */}
       <div className="relative mb-8 rounded-2xl overflow-hidden border border-surface-border">

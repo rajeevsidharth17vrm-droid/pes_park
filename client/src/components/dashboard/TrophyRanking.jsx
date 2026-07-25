@@ -4,22 +4,22 @@ import { cn } from "../../lib/utils"
 import { TeamLogoIcon } from "../common/TeamLogo"
 import PlayerAvatarIcon from "../common/PlayerAvatarIcon"
 import ballondorTrophy    from "../../../images/ballondor.png"
-import teamLeagueTrophy   from "../../../images/Team League.png"
+import teamLeagueTrophy   from "../../../images/Auction Tour.png"
 import weeklyTrophy       from "../../../images/Weekly.png"
 import uclTrophy          from "../../../images/ucl.png"
 import goldenBootTrophy   from "../../../images/Golden Boot.png"
-import teamLeagueGBTrophy from "../../../images/team league_gb.png"
+import teamLeagueGBTrophy from "../../../images/auction tour_gb.png"
 import uclGBTrophy        from "../../../images/ucl_gb.png"
 
 const TROPHY_OPTIONS = [
   { value: "trophy1Count", label: "Ballon d'Or",           image: ballondorTrophy    },
-  { value: "trophy2Count", label: "Team League",           image: teamLeagueTrophy   },
-  { value: "trophy4Count", label: "UCL",                   image: uclTrophy          },
-  { value: "trophy3Count", label: "Weekly",                image: weeklyTrophy       },
+  { value: "trophy2Count", label: "Auction Tour",           image: teamLeagueTrophy   },
+  { value: "trophy4Count", label: "Solo Tour",                   image: uclTrophy          },
+  { value: "trophy3Count", label: "Weekend Series",                image: weeklyTrophy       },
   { value: "trophy8Count", label: "Quick Tournament",      image: weeklyTrophy       },
   { value: "trophy5Count", label: "Weekly Golden Boot",    image: goldenBootTrophy   },
-  { value: "trophy6Count", label: "Team League Golden Boot", image: teamLeagueGBTrophy },
-  { value: "trophy7Count", label: "UCL Golden Boot",       image: uclGBTrophy        },
+  { value: "trophy6Count", label: "Auction Tour Golden Boot", image: teamLeagueGBTrophy },
+  { value: "trophy7Count", label: "Solo Tour Golden Boot",       image: uclGBTrophy        },
   { value: "trophy9Count", label: "Quick Tournament Golden Boot", image: goldenBootTrophy },
 ]
 

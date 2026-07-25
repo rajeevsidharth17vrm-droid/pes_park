@@ -285,13 +285,13 @@ function EditableRow({ player, onPlayerClick }) {
               </div>
               {[
                 { label: "Ballon d'Or",             value: trophy1, onChange: setTrophy1 },
-                { label: "Team League",             value: trophy2, onChange: setTrophy2 },
-                { label: "UCL",                     value: trophy4, onChange: setTrophy4 },
-                { label: "Weekly",                  value: trophy3, onChange: setTrophy3 },
+                { label: "Auction Tour",             value: trophy2, onChange: setTrophy2 },
+                { label: "Solo Tour",                     value: trophy4, onChange: setTrophy4 },
+                { label: "Weekend Series",                  value: trophy3, onChange: setTrophy3 },
                 { label: "Quick Tournament",         value: trophy8, onChange: setTrophy8 },
                 { label: "Weekly Golden Boot",      value: trophy5, onChange: setTrophy5 },
-                { label: "Team League Golden Boot", value: trophy6, onChange: setTrophy6 },
-                { label: "UCL Golden Boot",         value: trophy7, onChange: setTrophy7 },
+                { label: "Auction Tour Golden Boot", value: trophy6, onChange: setTrophy6 },
+                { label: "Solo Tour Golden Boot",         value: trophy7, onChange: setTrophy7 },
                 { label: "Quick Tournament Golden Boot", value: trophy9, onChange: setTrophy9 },
               ].map(t => (
                 <div key={t.label} className="flex items-center gap-2">

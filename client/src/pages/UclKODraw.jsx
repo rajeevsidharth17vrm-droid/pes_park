@@ -49,7 +49,7 @@ export default function UclKnockoutDraw() {
       <div className="flex items-center gap-3 mb-10">
         <Trophy className="w-8 h-8 text-accent" />
         <div>
-          <p className="text-xs text-slate-500 uppercase tracking-widest">Tamil Efootballers · UCL</p>
+          <p className="text-xs text-slate-500 uppercase tracking-widest">Pes Park · UCL</p>
           <p className="text-xl font-extrabold text-white">{tournament?.name || "Knockout Stage Draw"}</p>
         </div>
       </div>
