@@ -5,100 +5,79 @@ import Layout from "../components/layout/Layout"
 import Loading from "../components/common/Loading"
 import { useSeasonRecords, useLeagueInfo } from "../lib/queries"
 import { cn } from "../lib/utils"
-import ballondorImg  from "../../images/ballondor.png"
 import teamLeagueImg from "../../images/Team League.png"
-import weeklyImg     from "../../images/Weekly.png"
-import uclImg        from "../../images/ucl.png"
-import goldenBootImg from "../../images/Golden Boot.png"
 
-function TrophyRow({ image, label, winner, sub }) {
-  if (!winner) return null
-  return (
-    <div className="flex items-start gap-3 py-3 border-b border-surface-border/50 last:border-0">
-      <img src={image} alt={label} className="w-9 h-9 object-contain flex-shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-sm font-semibold text-white">{winner}</p>
-        {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  )
+function parseCustomAwards(record) {
+  if (record.custom_awards && Array.isArray(record.custom_awards) && record.custom_awards.length > 0) {
+    return record.custom_awards
+  }
+  const awards = []
+  if (record.champion_team) awards.push({ title: "Champion Team", winner: `${record.champion_team}${record.champion_pts ? ` (${record.champion_pts} pts)` : ""}` })
+  if (record.ballondor_winner) awards.push({ title: "Ballon d'Or", winner: record.ballondor_winner })
+  if (record.top_scorer) awards.push({ title: "Golden Boot", winner: `${record.top_scorer}${record.top_scorer_goals ? ` (${record.top_scorer_goals} goals)` : ""}` })
+  if (record.ucl_winner) awards.push({ title: "UCL Winner", winner: record.ucl_winner })
+  if (record.highest_mv_player) awards.push({ title: "Highest MV", winner: `${record.highest_mv_player}${record.highest_mv ? ` (MV ${record.highest_mv})` : ""}` })
+  if (record.longest_streak_player) awards.push({ title: "Longest Win Streak", winner: `${record.longest_streak_player}${record.longest_streak ? ` (${record.longest_streak} wins)` : ""}` })
+  const weeklyWinners = Array.isArray(record.weekly_winners) ? record.weekly_winners.filter(Boolean) : []
+  weeklyWinners.forEach((w, i) => awards.push({ title: `Weekly ${i + 1} Winner`, winner: w }))
+  return awards
 }
 
 function SeasonDetail({ record }) {
-  const weeklyWinners = Array.isArray(record.weekly_winners)
-    ? record.weekly_winners.filter(Boolean) : []
-  const squadPlayers  = Array.isArray(record.team_league_players)
+  const awards = parseCustomAwards(record)
+  const squadPlayers = Array.isArray(record.team_league_players)
     ? record.team_league_players.filter(Boolean) : []
 
   return (
     <div className="space-y-5 mt-5">
-      {/* Champion banner */}
-      {record.champion_team && (
-        <div className="card px-5 py-4 flex items-center gap-4 border-gold/20 bg-gold/5">
-          <Crown className="w-7 h-7 text-gold flex-shrink-0" />
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide mb-0.5">League Champions</p>
-            <p className="text-xl font-extrabold text-gold">{record.champion_team}</p>
-            {record.champion_pts && <p className="text-sm text-slate-400">{record.champion_pts} points</p>}
+      {/* Awards */}
+      {awards.filter(a => a.title && a.winner).length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-4 border-b border-surface-border">
+            <p className="text-sm font-semibold text-white">Awards & Winners</p>
+          </div>
+          <div className="px-5 py-2 divide-y divide-surface-border/50">
+            {awards.filter(a => a.title && a.winner).map((a, i) => (
+              <div key={i} className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <Trophy className="w-4 h-4 text-gold flex-shrink-0" />
+                  <p className="text-xs text-slate-500">{a.title}</p>
+                </div>
+                <p className="text-sm font-semibold text-white">{a.winner}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Season records grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {[
-          { label: "Top Scorer / Golden Boot", value: record.top_scorer, sub: `${record.top_scorer_goals ?? 0} goals` },
-          { label: "Highest MV",               value: record.highest_mv_player, sub: `MV ${record.highest_mv ?? 0}` },
-          { label: "Longest Win Streak",        value: record.longest_streak_player, sub: `${record.longest_streak ?? 0} wins` },
-        ].filter(s => s.value).map(s => (
-          <div key={s.label} className="card p-4">
-            <p className="text-xs text-slate-500 mb-1">{s.label}</p>
-            <p className="font-bold text-white">{s.value}</p>
-            <p className="text-xs text-accent">{s.sub}</p>
+      {/* Team League */}
+      {record.team_league_winner && (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-4 border-b border-surface-border flex items-center gap-3">
+            <img src={teamLeagueImg} alt="Team League" className="w-7 h-7 object-contain" />
+            <div>
+              <p className="text-xs text-slate-500">Team League Champions</p>
+              <p className="text-sm font-bold text-white">{record.team_league_winner}</p>
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* Trophy winners */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-surface-border">
-          <p className="text-sm font-semibold text-white">Trophy Winners</p>
-        </div>
-        <div className="px-5 py-2">
-          <TrophyRow image={ballondorImg}  label="Ballon d'Or"  winner={record.ballondor_winner} />
-          <TrophyRow image={goldenBootImg} label="Golden Boot"  winner={record.top_scorer} sub={`${record.top_scorer_goals ?? 0} goals`} />
-          <TrophyRow
-            image={teamLeagueImg}
-            label="Team League"
-            winner={record.team_league_winner}
-            sub={squadPlayers.length > 0 ? `Squad: ${squadPlayers.join(", ")}` : null}
-          />
-          <TrophyRow image={uclImg} label="UCL" winner={record.ucl_winner} />
-          {/* Weekly — per week */}
-          {weeklyWinners.length > 0 && (
-            <div className="flex items-start gap-3 py-3">
-              <img src={weeklyImg} alt="Weekly" className="w-9 h-9 object-contain flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-xs text-slate-500 mb-2">Weekly Trophy</p>
-                <div className="space-y-1">
-                  {weeklyWinners.map((w, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <span className="text-xs text-slate-600 w-14 flex-shrink-0">Week {i + 1}</span>
-                      <span className="text-white font-medium">{w}</span>
-                    </div>
-                  ))}
-                </div>
+          {squadPlayers.length > 0 && (
+            <div className="px-5 py-3">
+              <p className="text-xs text-slate-500 mb-2">Squad</p>
+              <div className="flex flex-wrap gap-1.5">
+                {squadPlayers.map((p, i) => (
+                  <span key={i} className="px-2 py-1 bg-surface-border/50 rounded-lg text-xs text-slate-300">{p}</span>
+                ))}
               </div>
             </div>
           )}
         </div>
-      </div>
+      )}
 
+      {/* Notes */}
       {record.notes && (
-        <div className="card px-5 py-4 border-l-2 border-accent/30">
-          <p className="text-xs text-slate-500 mb-1">Season Notes</p>
-          <p className="text-sm text-slate-300 italic">"{record.notes}"</p>
+        <div className="card px-5 py-4">
+          <p className="text-xs text-slate-500 mb-1">Notes</p>
+          <p className="text-sm text-slate-300">{record.notes}</p>
         </div>
       )}
     </div>
@@ -108,83 +87,59 @@ function SeasonDetail({ record }) {
 export default function HallOfFame() {
   const navigate = useNavigate()
   const { data: records = [], isLoading } = useSeasonRecords()
-  const { data: infoItems = [] }          = useLeagueInfo()
-  const [selectedId, setSelectedId] = useState(null)
+  const [openId, setOpenId] = useState(null)
 
-  const sorted = [...records].sort((a, b) => b.season_number - a.season_number)
-  const selected = selectedId
-    ? records.find(r => r.id === selectedId)
-    : sorted[0] || null
-
-  // Auto-select first when loaded
-  if (!isLoading && records.length > 0 && !selectedId && sorted[0]) {
-    setSelectedId(sorted[0].id)
-  }
+  if (isLoading) return <Layout><Loading /></Layout>
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-medium mb-5 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <button onClick={() => navigate("/")}
+          className="flex items-center gap-1.5 text-slate-500 hover:text-white text-sm mb-5 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </button>
 
-        {/* Hero */}
-        <div className="card px-6 py-8 mb-6 text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-accent/5" />
-          <Crown className="w-10 h-10 text-gold mx-auto mb-3" />
-          <h1 className="text-3xl font-extrabold text-white mb-1">Hall of Fame</h1>
-          <p className="text-slate-400 text-sm">Tamil Efootballers League · Season History</p>
+        <div className="flex items-center gap-3 mb-6">
+          <Trophy className="w-7 h-7 text-gold" />
+          <div>
+            <h1 className="text-xl font-extrabold text-white">Hall of Fame</h1>
+            <p className="text-sm text-slate-500">Season records and award winners</p>
+          </div>
         </div>
 
-        {isLoading ? (
-          <Loading />
-        ) : records.length === 0 ? (
-          <div className="card px-6 py-16 text-center">
-            <Trophy className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-400 font-medium">No season records yet</p>
-            <p className="text-xs text-slate-600 mt-1">Admin can add season records from the Setup tab</p>
+        {records.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-slate-400">No season records yet</p>
           </div>
-        ) : (
-          <>
-            {/* League Info Board — shown above season dropdown */}
-            {infoItems.length > 0 && (
-              <div className="card overflow-hidden mb-4">
-                <div className="divide-y divide-surface-border/50">
-                  {infoItems.map(item => (
-                    <div key={item.id} className="px-5 py-4">
-                      <p className="text-sm font-bold text-accent mb-1">{item.title}</p>
-                      <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{item.content}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Season selector dropdown */}
-            <div className="relative">
-              <select
-                value={selectedId ?? ""}
-                onChange={e => setSelectedId(parseInt(e.target.value))}
-                className="w-full appearance-none bg-pitch-800 border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-accent/40 transition-colors cursor-pointer pr-10"
-              >
-                {sorted.map(r => (
-                  <option key={r.id} value={r.id} className="bg-pitch-900 text-white">
-                    {r.season_name || `Season ${r.season_number}`}
-                    {r.year ? ` · ${r.year}` : ""}
-                    {r.champion_team ? ` — 🏆 ${r.champion_team}` : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-
-            {/* Selected season detail */}
-            {selected && <SeasonDetail record={selected} />}
-          </>
         )}
+
+        <div className="space-y-2">
+          {records.map(record => {
+            const isOpen = openId === record.id
+            return (
+              <div key={record.id} className="card overflow-hidden">
+                <button
+                  onClick={() => setOpenId(isOpen ? null : record.id)}
+                  className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-hover transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Crown className="w-5 h-5 text-gold flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="font-bold text-white">{record.season_name}</p>
+                      <p className="text-xs text-slate-500">{record.year}</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={cn("w-4 h-4 text-slate-500 transition-transform", isOpen && "rotate-180")} />
+                </button>
+                {isOpen && (
+                  <div className="px-5 pb-5 border-t border-surface-border">
+                    <SeasonDetail record={record} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </Layout>
   )
