@@ -1,14 +1,15 @@
 import { useNavigate } from "react-router-dom"
-import { X, Users, GitCompare, Shield, Trophy, TrendingUp, Award } from "lucide-react"
+import { X, Users, GitCompare, Shield, Trophy, TrendingUp, Award, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
 
 const MENU_ITEMS = [
-  { value: "players",  label: "Total Players",   icon: Users       },
-  { value: "compare",  label: "Compare Players", icon: GitCompare  },
-  { value: "teams",    label: "Teams",           icon: Shield      },
-  { value: "bdr",      label: "BDR Rankings",    icon: Trophy      },
-  { value: "market",   label: "Market Value",    icon: TrendingUp  },
-  { value: "trophies", label: "Trophies",        icon: Award       },
+  { value: "players",    label: "Total Players",   icon: Users       },
+  { value: "compare",    label: "Compare Players", icon: GitCompare  },
+  { value: "teams",      label: "Teams",           icon: Shield      },
+  { value: "bdr",        label: "BDR Rankings",    icon: Trophy      },
+  { value: "bestplayer", label: "Best Player",     icon: Star        },
+  { value: "market",     label: "Market Value",    icon: TrendingUp  },
+  { value: "trophies",   label: "Trophies",        icon: Award       },
 ]
 
 export default function MobileMenu({ open, onClose }) {

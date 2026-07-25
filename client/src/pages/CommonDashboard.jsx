@@ -152,7 +152,6 @@ const PANEL_OPTIONS = [
   { value: "ucl",        label: "UCL"             },
   { value: "weekly",     label: "Weekly"          },
   { value: "quick",      label: "Quick Tournament" },
-  { value: "bestplayer", label: "Best Player"     },
 ]
 
 export default function CommonDashboard() {
