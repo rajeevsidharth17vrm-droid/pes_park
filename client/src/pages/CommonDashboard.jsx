@@ -520,7 +520,7 @@ export default function CommonDashboard() {
   const handlePlayer = (player) => navigate(`/player/${player.id}?${searchParams.toString()}`)
   const isLoading    = teamsLoading || playersLoading
 
-  const currentSeason = parseInt(settings.current_season || "6")
+  const currentSeason = parseInt(settings.current_season || "1")
   const currentYear   = new Date().getFullYear()
 
   const savedSeasons = [...seasonRecords].sort((a, b) => b.season_number - a.season_number)
