@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Pencil, Check, X, Trash2, Camera, Trophy, Search, Crown } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import PlayerAvatar from "../common/PlayerAvatar"
 import ImageUpload from "./ImageUpload"
 import { useUpdatePlayer, useDeletePlayer, useTeams } from "../../lib/queries"
@@ -12,7 +12,7 @@ function EditableRow({ player, onPlayerClick }) {
   const [editing, setEditing]         = useState(false)
   const [name, setName]               = useState(player.name)
   const [alias, setAlias]             = useState(player.alias ?? "")
-  const [grade, setGrade]             = useState(player.grade)
+  
   const [teamId, setTeamId]           = useState(player.teamId ?? "")
   const [bdrDelta, setBdrDelta]       = useState("")
   const [isCaptain, setIsCaptain]     = useState(player.isCaptain ?? false)
@@ -37,7 +37,7 @@ function EditableRow({ player, onPlayerClick }) {
     const body = {}
     if (name.trim() && name.trim() !== player.name) body.name = name.trim()
     if (alias.trim() !== (player.alias ?? "")) body.alias = alias.trim()
-    if (grade !== player.grade) body.grade = grade
+    
     if (bdrDelta !== "") body.bdrDelta = deltaNum
     if (teamId !== String(player.teamId ?? "")) {
       body.teamId = teamId === "" ? null : parseInt(teamId)
@@ -67,7 +67,7 @@ function EditableRow({ player, onPlayerClick }) {
     setBdrDelta("")
     setName(player.name)
     setAlias(player.alias ?? "")
-    setGrade(player.grade)
+    
     setTeamId(player.teamId ?? "")
     setIsCaptain(player.isCaptain ?? false)
     setAuctionPrice(player.auctionPrice ?? "")
@@ -169,16 +169,6 @@ function EditableRow({ player, onPlayerClick }) {
               )}
             </div>
           </div>
-        </td>
-
-        {/* Grade */}
-        <td className="py-3.5 px-4">
-          {editing ? (
-            <select value={grade} onChange={e => setGrade(e.target.value)}
-              className="bg-pitch-900 border border-surface-border rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40">
-              {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-          ) : <GradeBadge grade={player.grade} />}
         </td>
 
         {/* Auction */}
@@ -323,13 +313,13 @@ function EditableRow({ player, onPlayerClick }) {
 
 export default function PlayerManagement({ players, onPlayerClick }) {
   const [search, setSearch]   = useState("")
-  const [gradeFilter, setGradeFilter] = useState("All")
+  
   const [teamFilter, setTeamFilter]   = useState("All")
   const { data: teams = [] }  = useTeams()
 
   const filtered = players.filter(p => {
     const matchName  = p.name.toLowerCase().includes(search.toLowerCase())
-    const matchGrade = gradeFilter === "All" || p.grade === gradeFilter
+    const matchGrade = true
     const matchTeam  = teamFilter  === "All" || p.team  === teamFilter
     return matchName && matchGrade && matchTeam
   })
@@ -351,13 +341,6 @@ export default function PlayerManagement({ players, onPlayerClick }) {
           />
         </div>
         <select
-          value={gradeFilter}
-          onChange={e => setGradeFilter(e.target.value)}
-          className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40"
-        >
-          {["All","S","A","B","C"].map(g => <option key={g}>{g}</option>)}
-        </select>
-        <select
           value={teamFilter}
           onChange={e => setTeamFilter(e.target.value)}
           className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40 max-w-[160px]"
@@ -368,7 +351,7 @@ export default function PlayerManagement({ players, onPlayerClick }) {
 
       <p className="text-xs text-slate-500 mb-3">
         {filtered.length} of {players.length} player{players.length !== 1 ? "s" : ""}
-        {search || gradeFilter !== "All" || teamFilter !== "All" ? " matched" : " total"}
+        {search ||  teamFilter !== "All" ? " matched" : " total"}
       </p>
 
       <div className="card overflow-hidden">
@@ -376,7 +359,7 @@ export default function PlayerManagement({ players, onPlayerClick }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-surface-border">
-                {["Player / Team","Grade","Auction","Market value","BDR points",""].map(h => (
+                {["Player / Team","Auction","Market value","BDR points",""].map(h => (
                   <th key={h} className={cn(
                     "py-3 text-xs font-semibold text-slate-500 tracking-wide uppercase",
                     h === "Player / Team" || h === "" ? "px-5 text-left" : "px-4 text-center",

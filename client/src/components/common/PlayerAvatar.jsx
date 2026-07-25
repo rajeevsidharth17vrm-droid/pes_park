@@ -1,12 +1,5 @@
 import { cn } from "../../lib/utils"
 
-const gradeColors = {
-  S:   "bg-gold/20 text-gold border-gold/40",
-  A:   "bg-blue-400/20 text-blue-400 border-blue-400/40",
-  B:   "bg-emerald-400/20 text-emerald-400 border-emerald-400/40",
-  C:   "bg-slate-500/20 text-slate-400 border-slate-500/40",
-}
-
 export default function PlayerAvatar({ player, size = "md", className }) {
   const sizes = {
     sm:  "w-8 h-8 text-xs rounded-lg border",
@@ -16,7 +9,7 @@ export default function PlayerAvatar({ player, size = "md", className }) {
   }
 
   const initials = player.name?.split(" ").map(n => n[0]).join("") || "?"
-  const colorCls = gradeColors[player.grade] || gradeColors["C"]
+  const colorCls = "bg-accent/20 text-accent border-accent/40"
 
   if (player.imageUrl) {
     return (

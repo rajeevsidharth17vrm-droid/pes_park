@@ -18,14 +18,7 @@ import PlayerComparison from "../components/dashboard/PlayerComparison"
 import TeamsDirectory from "../components/dashboard/TeamsDirectory"
 import Loading from "../components/common/Loading"
 import CountUp from "../components/common/CountUp"
-import ChampionCelebration from "../components/common/ChampionCelebration"
-import BallonDorCelebration from "../components/common/BallonDorCelebration"
-import weeklyTrophyLogo from "../../images/Weekly.png"
-import quickTrophyLogo from "../../images/Weekly.png" // reused — no dedicated Quick Tournament asset yet
-import teamLeagueTrophyLogo from "../../images/Team League.png"
-import uclTrophyLogo from "../../images/ucl.png"
 import goldenBootLogo from "../../images/Golden Boot.png"
-import ballonDorTrophy from "../../images/ballondor.png"
 import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs } from "../lib/queries"
 
 // Resolves a player's chosen avatar — custom upload takes priority,
@@ -560,62 +553,6 @@ export default function CommonDashboard() {
 
   return (
     <Layout>
-      {showWeeklyCelebration && displayWeeklyChampion ? (
-        <ChampionCelebration
-          trophyImage={weeklyTrophyLogo}
-          eyebrow="Weekly Tournament"
-          title={displayWeeklyChampion}
-          subtitle="is the Weekly Champion! 🎉"
-          badgeImage={displayWeeklyChampionAvatar.thumb}
-          bgImage={displayWeeklyChampionAvatar.bg}
-        >
-          {weeklyGoldenBoot && <GoldenBootBadge scorer={weeklyGoldenBoot} />}
-        </ChampionCelebration>
-      ) : showQuickCelebration && displayQuickChampion ? (
-        <ChampionCelebration
-          trophyImage={quickTrophyLogo}
-          eyebrow="Quick Tournament"
-          title={displayQuickChampion}
-          subtitle="is the Quick Tournament Champion! 🎉"
-          badgeImage={displayQuickChampionAvatar.thumb}
-          bgImage={displayQuickChampionAvatar.bg}
-        >
-          {quickGoldenBoot && <GoldenBootBadge scorer={quickGoldenBoot} />}
-        </ChampionCelebration>
-      ) : showTeamCelebration && displayTeamChampion ? (
-        <ChampionCelebration
-          trophyImage={teamLeagueTrophyLogo}
-          eyebrow="Team League"
-          title={displayTeamChampion}
-          subtitle="are the Team League Champions! 🏆"
-          badgeImage={displayTeamLogo}
-          anthemUrl={displayTeamAnthem}
-        >
-          {displayTeamPlayers.length > 0 && (
-            <TeamRosterChips players={displayTeamPlayers} bestPerformerId={displayBestPerformer?.id} />
-          )}
-          {teamGoldenBoot && <GoldenBootBadge scorer={teamGoldenBoot} />}
-        </ChampionCelebration>
-      ) : showUclCelebration && displayUclChampion ? (
-        <ChampionCelebration
-          trophyImage={uclTrophyLogo}
-          eyebrow="UCL"
-          title={displayUclChampion}
-          subtitle="is the UCL Champion! 🏆"
-          badgeImage={displayUclChampionAvatar.thumb}
-          bgImage={displayUclChampionAvatar.bg}
-        >
-          {uclGoldenBoot && <GoldenBootBadge scorer={uclGoldenBoot} />}
-        </ChampionCelebration>
-      ) : showBallonDorCelebration && displayBallonDorWinner ? (
-        <BallonDorCelebration
-          trophyImage={ballonDorTrophy}
-          winnerName={displayBallonDorWinner.name}
-          bdrPoints={displayBallonDorWinner.bdrPoints}
-          avatarImage={resolveAvatar(displayBallonDorWinner).thumb}
-          bgImage={resolveAvatar(displayBallonDorWinner).bg}
-        />
-      ) : null}
 
       {/* Hero */}
       <div className="relative mb-8 rounded-2xl overflow-hidden border border-surface-border">

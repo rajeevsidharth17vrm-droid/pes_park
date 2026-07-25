@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Check, X, ArrowLeftRight, CheckCircle, XCircle, Repeat, Coins, Banknote, UserPlus, Clock } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import { useReviewTrade, useTrades } from "../../lib/queries"
 import { getMVTier, cn } from "../../lib/utils"
 
@@ -63,7 +63,6 @@ function TradeCard({ trade }) {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="font-semibold text-white text-sm">{trade.playerName}</span>
-              <GradeBadge grade={trade.playerGrade} />
             </div>
             <span className={cn("text-xs", tier.color)}>{tier.label} · MV {trade.playerMV}</span>
           </div>
@@ -78,7 +77,6 @@ function TradeCard({ trade }) {
             {trade.offeredPlayerName && (
               <div className="flex items-center gap-2 bg-pitch-900 rounded-lg px-3 py-1.5">
                 <span className="text-sm font-medium text-white">{trade.offeredPlayerName}</span>
-                <GradeBadge grade={trade.offeredPlayerGrade} />
               </div>
             )}
             {trade.offeredAmount > 0 && (

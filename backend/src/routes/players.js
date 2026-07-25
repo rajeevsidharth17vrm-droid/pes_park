@@ -92,7 +92,7 @@ const createSchema = z.object({
   name:          z.string().min(1),
   alias:         z.string().optional(),
   teamId:        z.number().int().positive().optional(),
-  grade:         z.enum(["S","A","B","C"]),
+  grade:         z.enum(["S","A","B","C"]).optional().default("C"),
   isCaptain:     z.boolean().optional().default(false),
   auctionPrice:  z.number().int().min(0).optional(),
   trophy1Count:  z.number().int().min(0).optional().default(0),

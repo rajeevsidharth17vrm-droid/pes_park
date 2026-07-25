@@ -1,5 +1,5 @@
 import { Crown } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import { getMVTier, cn } from "../../lib/utils"
 import PlayerAvatar from "../common/PlayerAvatar"
 
@@ -11,7 +11,6 @@ const FormDot = ({ result }) => {
 function PlayerCard({ player, onPlayerClick }) {
   const delta    = player.isCaptain ? 0 : player.marketValue - player.auctionPrice
   const tier     = getMVTier(player.marketValue)
-  const isElite  = player.grade === "S"
 
   return (
     <div onClick={() => onPlayerClick?.(player)} className={cn(
@@ -30,7 +29,6 @@ function PlayerCard({ player, onPlayerClick }) {
             <p className="text-xs text-slate-500 mt-0.5">"{player.alias}"</p>
           </div>
         </div>
-        <GradeBadge grade={player.grade} size="md" />
       </div>
 
       {/* Stats grid */}

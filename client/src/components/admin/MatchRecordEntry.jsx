@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Plus, CheckCircle, ArrowRight, Trash2, Pencil, X, Save } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import { useLogRecord, useDeleteRecord, useEditRecord } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 
@@ -142,7 +142,6 @@ function RecordRow({ record, onDeleted, onEdited }) {
             <ArrowRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
           )}
           <span className="text-sm text-slate-400 truncate">{record.opponentName}</span>
-          <GradeBadge grade={record.opponentGrade} />
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <p className="text-xs text-slate-600">
@@ -213,7 +212,6 @@ export default function MatchRecordEntry({ players, initialRecords }) {
           id:            data.record.id,
           playerName:    players.find(p => p.id === parseInt(playerId))?.name || "",
           opponentName:  selectedOpp?.name || "",
-          opponentGrade: selectedOpp?.grade || "",
           result,
           matchType,
           playerScore:   payload.playerScore ?? null,
@@ -285,7 +283,7 @@ export default function MatchRecordEntry({ players, initialRecords }) {
               className="w-full bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40 disabled:opacity-50">
               <option value="">Select opponent…</option>
               {players.filter(p => p.id !== parseInt(playerId)).map(p => (
-                <option key={p.id} value={p.id}>{p.name} — {p.grade} ({p.team})</option>
+                <option key={p.id} value={p.id}>{p.name} ({p.team})</option>
               ))}
             </select>
           </div>
@@ -312,8 +310,6 @@ export default function MatchRecordEntry({ players, initialRecords }) {
           {selectedOpp && (
             <div className="bg-pitch-800 rounded-xl p-4 border border-surface-border">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">Opponent grade</span>
-                <GradeBadge grade={selectedOpp.grade} size="md" />
               </div>
             </div>
           )}

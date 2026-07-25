@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Pencil, Trash2, Check, X, AlertTriangle, ChevronDown, ChevronRight, Users, KeyRound } from "lucide-react"
 import { useTeams, useDeleteTeam, useUpdateTeam, useUnassignPlayer, useChangeTeamPassword } from "../../lib/queries"
 import PlayerAvatar from "../common/PlayerAvatar"
-import GradeBadge from "../common/GradeBadge"
+
 import { TeamAvatar } from "../common/TeamLogo"
 import { cn } from "../../lib/utils"
 
@@ -42,7 +42,6 @@ function RosterPlayerRow({ player }) {
         <p className="text-sm font-medium text-white truncate">{player.name}</p>
         {player.alias && <p className="text-xs text-slate-500">"{player.alias}"</p>}
       </div>
-      <GradeBadge grade={player.grade} />
       <span className="text-xs font-mono text-slate-400 w-12 text-right">{player.marketValue}</span>
       <button
         onClick={() => setConfirmDel(true)}

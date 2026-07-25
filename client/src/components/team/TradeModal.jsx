@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { X, ArrowLeftRight, AlertCircle, Repeat, Coins, Banknote } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import { cn } from "../../lib/utils"
 
 const TYPES_FOR_OWNED = [
@@ -66,7 +66,6 @@ export default function TradeModal({ player, myPlayers = [], myPurse = 0, onConf
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="font-semibold text-white text-sm">{player.name}</span>
-                <GradeBadge grade={player.grade} />
               </div>
               <p className="text-xs text-slate-500">{player.team || "Free agent"}</p>
             </div>

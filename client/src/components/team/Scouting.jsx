@@ -1,15 +1,14 @@
 import { useState } from "react"
 import { Search, ArrowLeftRight, CheckCircle, Crown, Star } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import TradeModal from "./TradeModal"
 import { useRequestTrade, useFavorites, useToggleFavorite } from "../../lib/queries"
 import { getMVTier, cn } from "../../lib/utils"
 import { TeamLogoIcon } from "../common/TeamLogo"
 
-const GRADES = ["All","S","A","B","C"]
 
 export default function Scouting({ allPlayers, myTeamName, myPlayers = [], myPurse = 0, onPlayerClick, onTradeSuccess, view: controlledView, onViewChange }) {
-  const [gradeFilter, setGradeFilter] = useState("All")
+  
   const [teamFilter, setTeamFilter]   = useState("All")
   const [search, setSearch]           = useState("")
   const [tradeTarget, setTradeTarget] = useState(null)
@@ -30,7 +29,7 @@ export default function Scouting({ allPlayers, myTeamName, myPlayers = [], myPur
     : allPlayers
 
   const filtered = scopedPlayers.filter(p => {
-    const matchGrade = gradeFilter === "All" || p.grade === gradeFilter
+    const matchGrade = true
     const matchTeam  = teamFilter  === "All" || p.team  === teamFilter
     const matchName  = p.name.toLowerCase().includes(search.toLowerCase())
     return matchGrade && matchTeam && matchName
@@ -93,10 +92,6 @@ export default function Scouting({ allPlayers, myTeamName, myPlayers = [], myPur
             className="w-full bg-pitch-800 border border-surface-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-accent/40 transition-colors" />
         </div>
         <div className="flex gap-2">
-          <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)}
-            className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40">
-            {GRADES.map(g => <option key={g}>{g}</option>)}
-          </select>
           <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
             className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40 max-w-[160px]">
             {teams.map(t => <option key={t}>{t}</option>)}
@@ -108,7 +103,7 @@ export default function Scouting({ allPlayers, myTeamName, myPlayers = [], myPur
 
       <div className="card overflow-hidden">
         <div className="hidden sm:grid grid-cols-[32px_2fr_80px_2fr_100px_100px_100px_140px] px-5 py-2.5 border-b border-surface-border">
-          {["","Player","Grade","Team","Auction","MV","BDR",""].map((h, i) => (
+          {["","Player","Team","Auction","MV","BDR",""].map((h, i) => (
             <span key={i} className={cn("text-xs font-semibold text-slate-600 uppercase tracking-wide", h === "Auction" || h === "MV" || h === "BDR" ? "text-right" : "")}>{h}</span>
           ))}
         </div>
@@ -154,7 +149,6 @@ export default function Scouting({ allPlayers, myTeamName, myPlayers = [], myPur
                     </p>
                   </div>
                 </button>
-                <div><GradeBadge grade={player.grade} /></div>
                 <p className="hidden sm:flex items-center gap-2 text-sm text-slate-400 truncate">
                   <TeamLogoIcon logoUrl={player.teamLogo} name={player.team} />
                   {player.team}

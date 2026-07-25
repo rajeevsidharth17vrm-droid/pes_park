@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ArrowLeftRight, Clock, CheckCircle, XCircle, Repeat, Coins, Banknote, UserPlus, X, Check } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import { useTeamReviewTrade, useCancelTrade } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 
@@ -52,7 +52,6 @@ function TradeRow({ trade, isInbox, onAccept, onReject, onCancel, busy }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-sm font-medium text-white">{trade.playerName}</span>
-            <GradeBadge grade={trade.playerGrade} />
           </div>
           <p className="text-xs text-slate-500 truncate mb-1">
             {trade.fromTeam} <span className="text-slate-600 mx-1">→</span> {trade.toTeam || "Free agent"}

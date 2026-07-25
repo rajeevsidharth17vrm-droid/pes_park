@@ -207,7 +207,7 @@ router.post("/team", authenticate, async (req, res, next) => {
       VALUES ($1,$2,$3,$4,'league',$5,$6,$7,$8,$9,$10,$11)
       RETURNING *
     `, [
-      playerId, opponentId, result, oppCheck.rows[0].grade,
+      playerId, opponentId, result, 'C',
       playerScore ?? null, opponentScore ?? null,
       new Date().toISOString().slice(0, 10),
       req.user.id, seasonNumber, fixtureId,
@@ -330,7 +330,7 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
 
     const oppRes = await query("SELECT grade FROM players WHERE id = $1", [opponentId])
     if (!oppRes.rows[0]) return res.status(404).json({ error: "Opponent not found" })
-    const opponentGrade = oppRes.rows[0].grade
+    const opponentGrade = 'C'
 
     const seasonNumber = await getCurrentSeason()
     const ins = await query(`

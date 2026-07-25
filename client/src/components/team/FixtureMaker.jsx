@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ClipboardList, ChevronRight, X, Save, Trash2, History, Check, ChevronDown, Download } from "lucide-react"
-import GradeBadge from "../common/GradeBadge"
+
 import { useLineup, useSaveLineup, useClearLineup, useH2H } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 import tecLogo from "../../../images/logo.png"
@@ -33,12 +33,10 @@ function H2HPopup({ p1, p2, onClose }) {
           <div className="flex items-center justify-between gap-3">
             <div className="text-center flex-1">
               <p className="text-sm font-bold text-white">{p1?.name}</p>
-              <GradeBadge grade={p1?.grade} size="sm" />
             </div>
             <span className="text-xs font-bold text-slate-500">VS</span>
             <div className="text-center flex-1">
               <p className="text-sm font-bold text-white">{p2?.name}</p>
-              <GradeBadge grade={p2?.grade} size="sm" />
             </div>
           </div>
 
@@ -120,7 +118,7 @@ function MatchupRow({ slot, myPlayers, oppPlayers, matchup, onChange, onViewH2H 
       >
         <option value="">— Pick player —</option>
         {myPlayers.map(p => (
-          <option key={p.id} value={p.id}>{p.name} ({p.grade})</option>
+          <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
 
@@ -135,7 +133,7 @@ function MatchupRow({ slot, myPlayers, oppPlayers, matchup, onChange, onViewH2H 
       >
         <option value="">— Pick player —</option>
         {oppPlayers.map(p => (
-          <option key={p.id} value={p.id}>{p.name} ({p.grade})</option>
+          <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
 

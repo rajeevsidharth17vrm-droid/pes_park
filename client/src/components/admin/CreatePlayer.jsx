@@ -2,16 +2,12 @@ import { useState } from "react"
 import { User, CheckCircle, Camera, Crown, Trophy } from "lucide-react"
 import { useCreatePlayer, useTeams, useUpdatePlayer } from "../../lib/queries"
 import { uploadPlayerImage } from "../../lib/supabase"
-import GradeBadge from "../common/GradeBadge"
 import { cn } from "../../lib/utils"
-
-const GRADES = ["S", "A", "B", "C"]
 
 export default function CreatePlayer({ onSuccess }) {
   const [name, setName]                 = useState("")
   const [alias, setAlias]               = useState("")
   const [teamId, setTeamId]             = useState("")
-  const [grade, setGrade]               = useState("B")
   const [isCaptain, setIsCaptain]       = useState(false)
   const [auctionPrice, setAuctionPrice] = useState("")
   const [trophy1, setTrophy1]           = useState("")
@@ -27,7 +23,7 @@ export default function CreatePlayer({ onSuccess }) {
   const createPlayer         = useCreatePlayer()
   const updatePlayer         = useUpdatePlayer()
 
-  const canSubmit = name && grade && (isCaptain || auctionPrice)
+  const canSubmit = name && (isCaptain || auctionPrice)
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0]
@@ -44,7 +40,6 @@ export default function CreatePlayer({ onSuccess }) {
         name,
         alias: alias || undefined,
         teamId: teamId ? parseInt(teamId) : undefined,
-        grade,
         isCaptain,
         auctionPrice: isCaptain ? undefined : parseInt(auctionPrice),
         trophy1Count: parseInt(trophy1) || 0,
@@ -64,7 +59,7 @@ export default function CreatePlayer({ onSuccess }) {
             }
           }
           setDone(data)
-          setName(""); setAlias(""); setTeamId(""); setGrade("B")
+          setName(""); setAlias(""); setTeamId("")
           setIsCaptain(false)
           setAuctionPrice("")
           setTrophy1(""); setTrophy2(""); setTrophy3(""); setTrophy4("")
@@ -182,24 +177,6 @@ export default function CreatePlayer({ onSuccess }) {
               </p>
             </div>
           </button>
-        </div>
-
-        <div>
-          <label className="text-xs font-medium text-slate-400 mb-1.5 block">Grade</label>
-          <div className="flex gap-1.5 flex-wrap">
-            {GRADES.map(g => (
-              <button key={g} onClick={() => setGrade(g)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
-                  grade === g
-                    ? "border-accent bg-accent/15 text-accent"
-                    : "border-surface-border text-slate-400 hover:border-slate-500"
-                )}>
-                {g}
-              </button>
-            ))}
-          </div>
-          {grade && <div className="mt-2"><GradeBadge grade={grade} size="md" /></div>}
         </div>
 
         <div>
