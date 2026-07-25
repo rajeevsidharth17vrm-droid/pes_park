@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { ChevronDown, Trophy, Users, TrendingUp, Activity, Star, Gavel } from "lucide-react"
+import { ChevronDown, Trophy, Users, TrendingUp, Activity, Star } from "lucide-react"
 import { cn } from "../lib/utils"
 import { getAvatarById } from "../lib/avatars"
 import Layout from "../components/layout/Layout"
 import StandingsTable from "../components/dashboard/StandingsTable"
 import BDRRanking from "../components/dashboard/BDRRanking"
+import BestPlayerRanking from "../components/dashboard/BestPlayerRanking"
 import MarketValues from "../components/dashboard/MarketValues"
 import TrophyRanking from "../components/dashboard/TrophyRanking"
 import UclStandings from "../components/dashboard/UclStandings"
 import WeeklyDashboard from "../components/dashboard/WeeklyDashboard"
+import QuickTournamentDashboard from "../components/dashboard/QuickTournamentDashboard"
 import PlayersDirectory from "../components/dashboard/PlayersDirectory"
 import PastSeasonDashboard from "../components/dashboard/PastSeasonDashboard"
 import PlayerComparison from "../components/dashboard/PlayerComparison"
@@ -19,12 +21,12 @@ import CountUp from "../components/common/CountUp"
 import ChampionCelebration from "../components/common/ChampionCelebration"
 import BallonDorCelebration from "../components/common/BallonDorCelebration"
 import weeklyTrophyLogo from "../../images/Weekly.png"
+import quickTrophyLogo from "../../images/Weekly.png" // reused — no dedicated Quick Tournament asset yet
 import teamLeagueTrophyLogo from "../../images/Team League.png"
 import uclTrophyLogo from "../../images/ucl.png"
 import goldenBootLogo from "../../images/Golden Boot.png"
 import ballonDorTrophy from "../../images/ballondor.png"
-import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs, useAuctionCurrent, useLeagueFormatPublic } from "../lib/queries"
-import { useAuctionSocket } from "../hooks/useAuctionSocket"
+import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs } from "../lib/queries"
 
 // Resolves a player's chosen avatar — custom upload takes priority,
 // falls back to their picked preset character, then to nothing at all.
@@ -146,31 +148,27 @@ function TeamRosterChips({ players, bestPerformerId, delay = 3000 }) {
 }
 
 const PANEL_OPTIONS = [
-  { value: "players",    label: "Total players"   },
-  { value: "compare",    label: "Compare players" },
-  { value: "teams",      label: "Teams"           },
   { value: "standings",  label: "League table"    },
   { value: "ucl",        label: "UCL"             },
   { value: "weekly",     label: "Weekly"          },
-  { value: "bdr",        label: "BDR ranking"     },
-  { value: "market",     label: "Market values"   },
-  { value: "trophies",   label: "Trophies"        },
+  { value: "quick",      label: "Quick Tournament" },
+  { value: "bestplayer", label: "Best Player"     },
 ]
 
 export default function CommonDashboard() {
   const navigate = useNavigate()
-  const { data: auctionData } = useAuctionCurrent()
-  useAuctionSocket()
   const { data: teams   = [], isLoading: teamsLoading   } = useTeams()
   const { data: players = [], isLoading: playersLoading } = usePlayers()
   const { data: seasonRecords = [] }                      = useSeasonRecords()
   const { data: settings = {} }                          = useSettings()
   const { data: weeklyTournament }                        = useWeeklyCurrent()
+  const { data: quickTournament }                         = useQuickTournamentCurrent()
   const { data: fixtures = [] }                           = useFixtures()
   const { data: uclKnockout }                             = useUclKnockoutCurrent()
   const { data: teamTopScorers = [] }                     = useTopScorers()
   const { data: uclTopScorers = [] }                      = useUclTopScorers()
   const { data: weeklyTopScorers = [] }                   = useWeeklyTopScorers()
+  const { data: quickTopScorers = [] }                    = useQuickTournamentTopScorers()
 
   const urlParams = new URLSearchParams(window.location.search)
 
@@ -235,6 +233,60 @@ export default function CommonDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyChampion, weeklyTournament?.id])
 
+  // ── Quick Tournament champion celebration ────────────────────────────────
+  const [showQuickCelebration, setShowQuickCelebration] = useState(false)
+  const quickFinalMatch = quickTournament?.matches?.find(
+    m => m.round === quickTournament.total_rounds && m.status === "completed"
+  )
+  const quickChampion = quickFinalMatch
+    ? (quickFinalMatch.winnerId === quickFinalMatch.player1Id ? quickFinalMatch.player1Name : quickFinalMatch.player2Name)
+    : null
+  const quickChampionAvatar = quickFinalMatch
+    ? resolveAvatar(
+        quickFinalMatch.winnerId === quickFinalMatch.player1Id
+          ? { avatarId: quickFinalMatch.player1AvatarId, avatarUrl: quickFinalMatch.player1AvatarUrl, avatarBgUrl: quickFinalMatch.player1AvatarBgUrl }
+          : { avatarId: quickFinalMatch.player2AvatarId, avatarUrl: quickFinalMatch.player2AvatarUrl, avatarBgUrl: quickFinalMatch.player2AvatarBgUrl }
+      )
+    : { thumb: null, bg: null }
+
+  const testQuickActive = urlParams.has("testCelebration")
+  const testQuickParam  = urlParams.get("testCelebration")
+  const testQuickMatchedPlayer = testQuickParam
+    ? players.find(p => p.name.toLowerCase() === testQuickParam.toLowerCase())
+    : null
+  const testQuickName   = testQuickActive
+    ? (testQuickMatchedPlayer?.name || (testQuickParam && !["1", "true"].includes(testQuickParam) ? testQuickParam : "Test Player"))
+    : null
+  const displayQuickChampion = testQuickName || quickChampion
+  const displayQuickChampionAvatar = testQuickActive
+    ? resolveAvatar(testQuickMatchedPlayer)
+    : quickChampionAvatar
+
+  useEffect(() => {
+    if (!testQuickActive) return
+    setShowQuickCelebration(true)
+    const dismiss = () => setShowQuickCelebration(false)
+    const timer = setTimeout(dismiss, 10000)
+    document.addEventListener("click", dismiss)
+    return () => { clearTimeout(timer); document.removeEventListener("click", dismiss) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testQuickActive])
+
+  useEffect(() => {
+    if (testQuickActive) return
+    if (!quickChampion || !quickTournament?.id) return
+    const key = `quick_champion_seen_${quickTournament.id}`
+    if (!localStorage.getItem(key)) {
+      setShowQuickCelebration(true)
+      localStorage.setItem(key, "1")
+      const dismiss = () => setShowQuickCelebration(false)
+      const timer = setTimeout(dismiss, 10000)
+      document.addEventListener("click", dismiss)
+      return () => { clearTimeout(timer); document.removeEventListener("click", dismiss) }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickChampion, quickTournament?.id])
+
   // ── Team League champion celebration ────────────────────────────────────
   // Fires once the PLAYOFF FINAL is completed — NOT when regular-season
   // fixtures finish (that moment only generates the playoff bracket; the
@@ -242,18 +294,13 @@ export default function CommonDashboard() {
   const [showTeamCelebration, setShowTeamCelebration] = useState(false)
   const teamCelebrationSeason = settings.current_season
   const { data: playoffsData }   = useTeamLeaguePlayoffs()
-  const { data: leagueFormatData } = useLeagueFormatPublic()
-  const isLeagueOnly = leagueFormatData?.format === "league"
 
   const playoffFinal    = playoffsData?.matches?.find(m => m.matchType === "final")
   const playoffComplete = playoffFinal?.status === "completed"
 
-  // Champion detection — works for both formats:
-  // League+Knockout: read from the playoff Final winner
-  // League Only: read the stored champion team ID from app_settings
-  const championTeamId = isLeagueOnly
-    ? (leagueFormatData?.leagueOnlyChampionTeamId || null)
-    : (playoffComplete ? playoffFinal.winnerTeamId : null)
+  // Champion is decided by the playoff Final winner (League + Knockout is
+  // the only format now — format switching was removed).
+  const championTeamId = playoffComplete ? playoffFinal.winnerTeamId : null
   const teamChampion = championTeamId ? teams.find(t => t.id === championTeamId) : null
 
   // Captain always shown first in the roster list, wherever it's used.
@@ -433,7 +480,7 @@ export default function CommonDashboard() {
   }, [showBallonDorCelebration, testBallonDorActive])
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const activePanel    = searchParams.get("view") || "players"
+  const activePanel    = searchParams.get("view") || "standings"
   const trophyKey      = searchParams.get("trophy") || undefined
   const standingsView  = searchParams.get("standingsView") || undefined
   const urlYear        = searchParams.get("year")
@@ -510,6 +557,7 @@ export default function CommonDashboard() {
   const teamGoldenBoot   = teamTopScorers[0]?.goals > 0   ? teamTopScorers[0]   : null
   const uclGoldenBoot    = uclTopScorers[0]?.goals > 0    ? uclTopScorers[0]    : null
   const weeklyGoldenBoot = weeklyTopScorers[0]?.goals > 0 ? weeklyTopScorers[0] : null
+  const quickGoldenBoot  = quickTopScorers[0]?.goals > 0 ? quickTopScorers[0] : null
 
   return (
     <Layout>
@@ -523,6 +571,17 @@ export default function CommonDashboard() {
           bgImage={displayWeeklyChampionAvatar.bg}
         >
           {weeklyGoldenBoot && <GoldenBootBadge scorer={weeklyGoldenBoot} />}
+        </ChampionCelebration>
+      ) : showQuickCelebration && displayQuickChampion ? (
+        <ChampionCelebration
+          trophyImage={quickTrophyLogo}
+          eyebrow="Quick Tournament"
+          title={displayQuickChampion}
+          subtitle="is the Quick Tournament Champion! 🎉"
+          badgeImage={displayQuickChampionAvatar.thumb}
+          bgImage={displayQuickChampionAvatar.bg}
+        >
+          {quickGoldenBoot && <GoldenBootBadge scorer={quickGoldenBoot} />}
         </ChampionCelebration>
       ) : showTeamCelebration && displayTeamChampion ? (
         <ChampionCelebration
@@ -558,27 +617,6 @@ export default function CommonDashboard() {
           bgImage={resolveAvatar(displayBallonDorWinner).bg}
         />
       ) : null}
-      {/* Live auction banner — only shows when an auction is actually active */}
-      {auctionData?.session?.status === "active" && auctionData?.session?.hasEntered && (
-        <button
-          onClick={() => navigate("/auction/live")}
-          className="w-full mb-6 rounded-2xl border border-gold/40 bg-gradient-to-r from-gold/10 via-gold/5 to-transparent px-6 py-4 flex items-center gap-3 hover:border-gold/60 transition-colors text-left animate-champion-pop"
-        >
-          <span className="relative flex-shrink-0">
-            <Gavel className="w-6 h-6 text-gold" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white">Live Player Auction happening now</p>
-            <p className="text-xs text-slate-400">
-              {auctionData.session.currentPlayerName
-                ? `${auctionData.session.currentPlayerName} — ₹${auctionData.session.currentBid} current bid`
-                : "Tap to watch live"}
-            </p>
-          </div>
-          <span className="text-xs font-semibold text-gold flex-shrink-0">Watch Live →</span>
-        </button>
-      )}
 
       {/* Hero */}
       <div className="relative mb-8 rounded-2xl overflow-hidden border border-surface-border">
@@ -633,7 +671,7 @@ export default function CommonDashboard() {
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-1">
-            Tamil Efootball League
+            Pes Park Players Data
           </h1>
 
           {isCurrent ? (
@@ -641,7 +679,7 @@ export default function CommonDashboard() {
               <p className="text-slate-400 text-sm">{teams.length} teams · {players.length} players</p>
               {teams[0] && (
                 <div className="mt-4 flex items-center gap-2">
-                  <span className="text-xs text-slate-500">League leader</span>
+                  <span className="text-xs text-slate-500">Table Topper</span>
                   <span className="text-xs font-semibold text-white bg-accent/15 border border-accent/25 px-2 py-0.5 rounded-full">
                     {teams[0].name} · {teams[0].points} pts
                   </span>
@@ -700,7 +738,9 @@ export default function CommonDashboard() {
                 {activePanel === "standings" && <StandingsTable teams={teams} players={players} onPlayerClick={handlePlayer} view={standingsView} onViewChange={setStandingsView} />}
                 {activePanel === "ucl"       && <UclStandings onPlayerClick={handlePlayer} />}
                 {activePanel === "weekly"    && <WeeklyDashboard onPlayerClick={handlePlayer} />}
+                {activePanel === "quick"     && <QuickTournamentDashboard onPlayerClick={handlePlayer} />}
                 {activePanel === "bdr"       && <BDRRanking players={players} onPlayerClick={handlePlayer} />}
+                {activePanel === "bestplayer" && <BestPlayerRanking players={players} onPlayerClick={handlePlayer} />}
                 {activePanel === "market"    && <MarketValues players={players} onPlayerClick={handlePlayer} />}
                 {activePanel === "trophies"  && <TrophyRanking players={players} onPlayerClick={handlePlayer} trophyKey={trophyKey} onTrophyChange={setTrophyKey} />}
                 {activePanel === "compare"   && <PlayerComparison onPlayerClick={handlePlayer} />}

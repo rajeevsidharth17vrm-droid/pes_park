@@ -1,5 +1,4 @@
 import LetterReveal from "./LetterReveal"
-import FireworkBurst from "./FireworkBurst"
 
 // Rough-edged diagonal gold streaks in the corners, approximating a
 // brush-painted texture across the black card — built from angled,
@@ -26,12 +25,6 @@ function BrushStrokes() {
 export default function BallonDorCelebration({ trophyImage, winnerName, bdrPoints, avatarImage, bgImage }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md animate-celebration-backdrop overflow-hidden">
-      <FireworkBurst bottom="0" left="15%" delay="0s" rise="-620px" />
-      <FireworkBurst bottom="0" left="82%" delay="0.6s" rise="-680px" color="#fff" />
-      <FireworkBurst bottom="0" left="8%" delay="1.2s" rise="-540px" />
-      <FireworkBurst bottom="0" left="90%" delay="1.8s" rise="-600px" color="#fff" />
-      <FireworkBurst bottom="0" left="50%" delay="0.9s" rise="-720px" />
-
       <div className="relative animate-champion-pop bg-black border-2 rounded-[24px]
                        px-7 py-10 sm:px-10 sm:py-12 mx-4 w-[min(26rem,calc(100vw-2rem))] text-center overflow-hidden"
         style={{ borderColor: "#D9A441", boxShadow: "0 0 60px rgba(217,164,65,0.25)" }}

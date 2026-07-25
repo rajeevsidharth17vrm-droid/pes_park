@@ -2,8 +2,35 @@ import { Router } from "express"
 import { z } from "zod"
 import { query } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
-import { recalcMarketValue } from "../services/marketValue.js"
+import { recalcMarketValue, recalcBestPlayer, matchBdrDelta, matchBpDelta } from "../services/marketValue.js"
+import { addBdr } from "../services/bdrAwards.js"
 import { recalcForm } from "../services/form.js"
+
+// Helper: apply BDR + best_player deltas for BOTH sides of a match result
+async function applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore) {
+  const playerBdr = matchBdrDelta(result, playerScore ?? 0)
+  const oppResult = result === "win" ? "loss" : result === "loss" ? "win" : "draw"
+  const oppBdr    = matchBdrDelta(oppResult, opponentScore ?? 0)
+
+  if (playerBdr) await addBdr(playerId, playerBdr)
+  if (oppBdr)    await addBdr(opponentId, oppBdr)
+
+  await recalcBestPlayer(playerId)
+  await recalcBestPlayer(opponentId)
+}
+
+// Helper: reverse BDR deltas when a match is deleted
+async function reverseMatchDeltas(playerId, opponentId, result, playerScore, opponentScore) {
+  const playerBdr = matchBdrDelta(result, playerScore ?? 0)
+  const oppResult = result === "win" ? "loss" : result === "loss" ? "win" : "draw"
+  const oppBdr    = matchBdrDelta(oppResult, opponentScore ?? 0)
+
+  if (playerBdr) await addBdr(playerId, -playerBdr)
+  if (oppBdr)    await addBdr(opponentId, -oppBdr)
+
+  await recalcBestPlayer(playerId)
+  await recalcBestPlayer(opponentId)
+}
 
 const router = Router()
 
@@ -112,13 +139,21 @@ const createSchema = z.object({
   playerId:      z.number().int().positive(),
   opponentId:    z.number().int().positive(),
   result:        z.enum(["win", "draw", "loss"]),
-  matchType:     z.enum(["league", "ucl", "weekly"]).default("league"),
+  matchType:     z.enum(["league", "ucl", "weekly", "quick"]).default("league"),
   playerScore:   z.number().int().min(0).optional(),
   opponentScore: z.number().int().min(0).optional(),
   date:          z.string().optional(),
 })
 
-// POST /api/records/team — team owner logs a Team League result
+// Team-owner self-service result logging. Re-added after being removed
+// alongside the old auto-team-standings-update behavior — this version
+// ONLY ever touches match_records (and the market value/form/BDR that
+// flow from it). It never touches teams.score_points/gf/ga/played/won/
+// drawn/lost. Team standings are updated exclusively by an admin,
+// manually, via PATCH /api/fixtures/:id/result (see routes/fixtures.js).
+
+// POST /api/records/team — team owner logs a Team League result for one
+// of their own players
 router.post("/team", authenticate, async (req, res, next) => {
   try {
     if (!req.user.teamId) {
@@ -179,37 +214,20 @@ router.post("/team", authenticate, async (req, res, next) => {
       playerCheck.rows[0].team_id ?? null,
     ])
 
-    // Live team points/goals — added immediately as each player result comes
-    // in, not waiting for the fixture to be closed. Player's own team gets
-    // 3/1/0 based on their result; the opponent's team gets the mirrored
-    // 3/1/0. Goals for/against accumulate the same way. This runs BEFORE
-    // the market-value/form recalc below deliberately — those are
-    // supplementary and shouldn't be able to block the team stats update
-    // (a league-table-facing change) if something's wrong with them.
-    const playerPts = result === "win" ? 3 : result === "draw" ? 1 : 0
-    const oppPts    = result === "win" ? 0 : result === "draw" ? 1 : 3
-    const pScore = playerScore ?? 0
-    const oScore = opponentScore ?? 0
-    await query(`UPDATE teams SET score_points = score_points + $1, gf = gf + $2, ga = ga + $3 WHERE id = $4`,
-      [playerPts, pScore, oScore, playerCheck.rows[0].team_id])
-    await query(`UPDATE teams SET score_points = score_points + $1, gf = gf + $2, ga = ga + $3 WHERE id = $4`,
-      [oppPts, oScore, pScore, oppTeamId])
-
     let recalcError = null
     try {
+      await applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore)
       await recalcMarketValue(playerId)
       await recalcMarketValue(opponentId)
       await recalcForm(playerId)
       await recalcForm(opponentId)
     } catch (recalcErr) {
-      // Match record + team stats already saved above — don't fail the
-      // whole request over a market-value/form recalculation problem.
-      console.error("Post-result recalc failed (match + team stats still saved):", recalcErr)
+      console.error("Post-result recalc failed (match record still saved):", recalcErr)
       recalcError = recalcErr.message
     }
 
     const fresh = await query(
-      `SELECT id, name, grade, market_value AS "marketValue", bdr_points AS "bdrPoints", form FROM players WHERE id = $1`,
+      `SELECT id, name, grade, market_value AS "marketValue", bdr_points AS "bdrPoints", best_player_points AS "bestPlayerPoints", form FROM players WHERE id = $1`,
       [playerId]
     )
     res.status(201).json({ record: ins.rows[0], player: fresh.rows[0], recalcError })
@@ -232,11 +250,11 @@ router.patch("/team/:id", authenticate, async (req, res, next) => {
     }).parse(req.body)
 
     const existing = await query(`
-      SELECT mr.id, mr.player_id, mr.opponent_id, mr.result, mr.player_score, mr.opponent_score,
-             p.team_id AS player_team_id, opp.team_id AS opponent_team_id
+      SELECT mr.id, mr.player_id, mr.opponent_id, mr.result AS old_result,
+             mr.player_score AS old_player_score, mr.opponent_score AS old_opponent_score,
+             p.team_id AS player_team_id
       FROM match_records mr
-      JOIN players p   ON mr.player_id   = p.id
-      JOIN players opp ON mr.opponent_id = opp.id
+      JOIN players p ON mr.player_id = p.id
       WHERE mr.id = $1 AND mr.match_type = 'league'
     `, [req.params.id])
     const record = existing.rows[0]
@@ -245,31 +263,15 @@ router.patch("/team/:id", authenticate, async (req, res, next) => {
       return res.status(403).json({ error: "You can only edit your own team's logged results" })
     }
 
-    // Reverse this record's OLD contribution to both teams' live totals
-    const oldPlayerPts = record.result === "win" ? 3 : record.result === "draw" ? 1 : 0
-    const oldOppPts    = record.result === "win" ? 0 : record.result === "loss" ? 3 : 1
-    const oldPScore = record.player_score ?? 0
-    const oldOScore = record.opponent_score ?? 0
-    await query(`UPDATE teams SET score_points = score_points - $1, gf = gf - $2, ga = ga - $3 WHERE id = $4`,
-      [oldPlayerPts, oldPScore, oldOScore, record.player_team_id])
-    await query(`UPDATE teams SET score_points = score_points - $1, gf = gf - $2, ga = ga - $3 WHERE id = $4`,
-      [oldOppPts, oldOScore, oldPScore, record.opponent_team_id])
+    // Reverse old BDR deltas, then apply new ones
+    await reverseMatchDeltas(record.player_id, record.opponent_id, record.old_result, record.old_player_score, record.old_opponent_score)
 
     await query(
       `UPDATE match_records SET result = $1, player_score = $2, opponent_score = $3 WHERE id = $4`,
       [result, playerScore ?? null, opponentScore ?? null, req.params.id]
     )
 
-    // Apply the NEW contribution
-    const newPlayerPts = result === "win" ? 3 : result === "draw" ? 1 : 0
-    const newOppPts    = result === "win" ? 0 : result === "loss" ? 3 : 1
-    const newPScore = playerScore ?? 0
-    const newOScore = opponentScore ?? 0
-    await query(`UPDATE teams SET score_points = score_points + $1, gf = gf + $2, ga = ga + $3 WHERE id = $4`,
-      [newPlayerPts, newPScore, newOScore, record.player_team_id])
-    await query(`UPDATE teams SET score_points = score_points + $1, gf = gf + $2, ga = ga + $3 WHERE id = $4`,
-      [newOppPts, newOScore, newPScore, record.opponent_team_id])
-
+    await applyMatchDeltas(record.player_id, record.opponent_id, result, playerScore, opponentScore)
     await recalcMarketValue(record.player_id)
     await recalcMarketValue(record.opponent_id)
     await recalcForm(record.player_id)
@@ -289,10 +291,9 @@ router.delete("/team/:id", authenticate, async (req, res, next) => {
 
     const existing = await query(`
       SELECT mr.player_id, mr.opponent_id, mr.result, mr.player_score, mr.opponent_score,
-             p.team_id AS player_team_id, opp.team_id AS opponent_team_id
+             p.team_id AS player_team_id
       FROM match_records mr
-      JOIN players p   ON mr.player_id   = p.id
-      JOIN players opp ON mr.opponent_id = opp.id
+      JOIN players p ON mr.player_id = p.id
       WHERE mr.id = $1 AND mr.match_type = 'league'
     `, [req.params.id])
     const record = existing.rows[0]
@@ -301,20 +302,15 @@ router.delete("/team/:id", authenticate, async (req, res, next) => {
       return res.status(403).json({ error: "You can only delete your own team's logged results" })
     }
 
-    const playerPts = record.result === "win" ? 3 : record.result === "draw" ? 1 : 0
-    const oppPts    = record.result === "win" ? 0 : record.result === "loss" ? 3 : 1
-    const pScore = record.player_score ?? 0
-    const oScore = record.opponent_score ?? 0
+    // Reverse BDR deltas before deleting
+    await reverseMatchDeltas(record.player_id, record.opponent_id, record.result, record.player_score, record.opponent_score)
 
     await query("DELETE FROM match_records WHERE id = $1", [req.params.id])
 
-    await query(`UPDATE teams SET score_points = score_points - $1, gf = gf - $2, ga = ga - $3 WHERE id = $4`,
-      [playerPts, pScore, oScore, record.player_team_id])
-    await query(`UPDATE teams SET score_points = score_points - $1, gf = gf - $2, ga = ga - $3 WHERE id = $4`,
-      [oppPts, oScore, pScore, record.opponent_team_id])
-
     await recalcMarketValue(record.player_id)
     await recalcMarketValue(record.opponent_id)
+    await recalcBestPlayer(record.player_id)
+    await recalcBestPlayer(record.opponent_id)
     await recalcForm(record.player_id)
     await recalcForm(record.opponent_id)
 
@@ -357,15 +353,16 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
 
     let recalcError = null
     try {
+      await applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore)
       await recalcMarketValue(playerId)
       await recalcMarketValue(opponentId)
     } catch (recalcErr) {
-      console.error("Post-result market value recalc failed (match record still saved):", recalcErr)
+      console.error("Post-result recalc failed (match record still saved):", recalcErr)
       recalcError = recalcErr.message
     }
 
     const fresh = await query(
-      `SELECT id, name, grade, market_value AS "marketValue", bdr_points AS "bdrPoints", form FROM players WHERE id = $1`,
+      `SELECT id, name, grade, market_value AS "marketValue", bdr_points AS "bdrPoints", best_player_points AS "bestPlayerPoints", form FROM players WHERE id = $1`,
       [playerId]
     )
 
@@ -386,19 +383,25 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
       opponentScore: z.number().int().min(0).optional(),
     }).parse(req.body)
 
-    // Fetch existing record to get player/opponent IDs
+    // Fetch existing record including old values for delta reversal
     const existing = await query(
-      "SELECT player_id, opponent_id FROM match_records WHERE id = $1",
+      "SELECT player_id, opponent_id, result AS old_result, player_score AS old_player_score, opponent_score AS old_opponent_score FROM match_records WHERE id = $1",
       [req.params.id]
     )
     if (!existing.rows[0]) return res.status(404).json({ error: "Record not found" })
-    const { player_id: playerId, opponent_id: opponentId } = existing.rows[0]
+    const { player_id: playerId, opponent_id: opponentId, old_result, old_player_score, old_opponent_score } = existing.rows[0]
+
+    // Reverse old BDR deltas
+    await reverseMatchDeltas(playerId, opponentId, old_result, old_player_score, old_opponent_score)
 
     await query(`
       UPDATE match_records
       SET result = $1, player_score = $2, opponent_score = $3
       WHERE id = $4
     `, [result, playerScore ?? null, opponentScore ?? null, req.params.id])
+
+    // Apply new BDR deltas
+    await applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore)
 
     // Rebuild form and MV for both players since result may have changed
     const letter    = result === "win" ? "W" : result === "draw" ? "D" : "L"
@@ -417,7 +420,7 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
     }
 
     const fresh = await query(
-      `SELECT id, name, grade, market_value AS "marketValue", bdr_points AS "bdrPoints", form FROM players WHERE id = $1`,
+      `SELECT id, name, grade, market_value AS "marketValue", bdr_points AS "bdrPoints", best_player_points AS "bestPlayerPoints", form FROM players WHERE id = $1`,
       [playerId]
     )
     res.json({ updated: true, player: fresh.rows[0], recalcError })
@@ -439,20 +442,29 @@ router.delete("/:id", authenticate, adminOnly, async (req, res, next) => {
     await query(`UPDATE ucl_knockout_matches SET match_record_id = NULL, status = 'pending', winner_id = NULL, player1_score = NULL, player2_score = NULL WHERE match_record_id = $1`, [mrId])
     await query(`UPDATE weekly_tournament_matches SET match_record_id = NULL, status = 'pending', winner_id = NULL, player1_score = NULL, player2_score = NULL WHERE match_record_id = $1`, [mrId])
 
-    const result = await query(
-      "DELETE FROM match_records WHERE id = $1 RETURNING player_id, opponent_id",
+    // Fetch old values before deleting so we can reverse BDR deltas
+    const oldRec = await query(
+      "SELECT player_id, opponent_id, result, player_score, opponent_score FROM match_records WHERE id = $1",
       [mrId]
     )
-    if (!result.rows[0]) return res.status(404).json({ error: "Record not found" })
+    if (!oldRec.rows[0]) return res.status(404).json({ error: "Record not found" })
+    const { player_id, opponent_id, result: oldResult, player_score, opponent_score } = oldRec.rows[0]
 
-    await recalcMarketValue(result.rows[0].player_id)
-    await recalcMarketValue(result.rows[0].opponent_id)
-    await recalcForm(result.rows[0].player_id)
-    await recalcForm(result.rows[0].opponent_id)
+    // Reverse BDR deltas
+    await reverseMatchDeltas(player_id, opponent_id, oldResult, player_score, opponent_score)
+
+    await query("DELETE FROM match_records WHERE id = $1", [mrId])
+
+    await recalcMarketValue(player_id)
+    await recalcMarketValue(opponent_id)
+    await recalcBestPlayer(player_id)
+    await recalcBestPlayer(opponent_id)
+    await recalcForm(player_id)
+    await recalcForm(opponent_id)
 
     const fresh = await query(
       `SELECT id, market_value AS "marketValue" FROM players WHERE id = $1`,
-      [result.rows[0].player_id]
+      [player_id]
     )
     res.json({ deleted: true, player: fresh.rows[0] })
   } catch (err) { next(err) }

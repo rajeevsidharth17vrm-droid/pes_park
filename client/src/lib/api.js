@@ -91,6 +91,22 @@ export const weeklyApi = {
   deleteTournament: (id)      => api.delete(`/weekly/${id}`).then(r => r.data),
 }
 
+export const quickTournamentApi = {
+  list:         ()            => api.get("/quick-tournament").then(r => r.data),
+  get:          (id)          => api.get(`/quick-tournament/${id}`).then(r => r.data),
+  current:      ()            => api.get("/quick-tournament/public/current").then(r => r.data),
+  topScorers:   ()            => api.get("/quick-tournament/public/top-scorers").then(r => r.data),
+  create:       (name)        => api.post("/quick-tournament", { name }).then(r => r.data),
+  setPlayers:   (id, playerIds) => api.post(`/quick-tournament/${id}/players`, { playerIds }).then(r => r.data),
+  start:        (id)          => api.post(`/quick-tournament/${id}/start`).then(r => r.data),
+  saveResult:    (matchId, player1Score, player2Score, tieWinnerId) =>
+    api.patch(`/quick-tournament/matches/${matchId}/result`, { player1Score, player2Score, tieWinnerId }).then(r => r.data),
+  updateMatchPlayers: (matchId, body) =>
+    api.patch(`/quick-tournament/matches/${matchId}/players`, body).then(r => r.data),
+  reset:        (id)          => api.post(`/quick-tournament/${id}/reset`).then(r => r.data),
+  deleteTournament: (id)      => api.delete(`/quick-tournament/${id}`).then(r => r.data),
+}
+
 export const uclApi = {
   groups:            ()              => api.get("/ucl/groups").then(r => r.data),
   adminGroups:       ()              => api.get("/ucl/admin-groups").then(r => r.data),
@@ -134,15 +150,11 @@ export const fixturesApi = {
   recent:     ()                        => api.get("/fixtures/recent").then(r => r.data),
   create:     (body)                    => api.post("/fixtures", body).then(r => r.data),
   generateSeason: (body)                => api.post("/fixtures/generate", body).then(r => r.data),
-  changeFormat:   (format)              => api.patch("/fixtures/format", { format }).then(r => r.data),
-  getFormat:      ()                    => api.get("/fixtures/format").then(r => r.data),
-  getFormatPublic:()                    => api.get("/fixtures/format/public").then(r => r.data),
   update:     (id, body)                => api.patch(`/fixtures/${id}`, body).then(r => r.data),
   updateRoundDate: (round, date)        => api.patch(`/fixtures/round/${round}/date`, { date }).then(r => r.data),
   delete:     (id)                      => api.delete(`/fixtures/${id}`).then(r => r.data),
   saveResult: (id, homeScore, awayScore, homeGoals, awayGoals) =>
     api.patch(`/fixtures/${id}/result`, { homeScore, awayScore, homeGoals, awayGoals }).then(r => r.data),
-  close:      (id)                      => api.post(`/fixtures/${id}/close`).then(r => r.data),
 }
 
 export const tradesApi = {
@@ -177,29 +189,4 @@ export const uclKnockoutApi = {
     api.patch(`/ucl-knockout/matches/${matchId}/players`, body).then(r => r.data),
   reset:        (id)           => api.post(`/ucl-knockout/${id}/reset`).then(r => r.data),
   deleteTournament: (id)       => api.delete(`/ucl-knockout/${id}`).then(r => r.data),
-}
-
-export const auctionApi = {
-  current:      ()                              => api.get("/auction/current").then(r => r.data),
-  start:        (budgetPerTeam)                 => api.post("/auction/start", { budgetPerTeam }).then(r => r.data),
-  retain:       (sessionId, teamId, playerId, price) =>
-    api.post("/auction/retain", { sessionId, teamId, playerId, price }).then(r => r.data),
-  removeRetention: (id)                         => api.delete(`/auction/retain/${id}`).then(r => r.data),
-  addToPool:    (sessionId, playerId)           => api.post("/auction/pool/add", { sessionId, playerId }).then(r => r.data),
-  removeFromPool: (id)                          => api.delete(`/auction/pool/${id}`).then(r => r.data),
-  buildPool:    (sessionId)                     => api.post("/auction/build-pool", { sessionId }).then(r => r.data),
-  nextPlayer:   (sessionId, playerId)           => api.post("/auction/next-player", { sessionId, playerId }).then(r => r.data),
-  bid:          (sessionId, teamId, amount)     => api.post("/auction/bid", { sessionId, teamId, amount }).then(r => r.data),
-  quickBid:     (sessionId, teamId)              => api.post("/auction/bid/quick", { sessionId, teamId }).then(r => r.data),
-  sell:         (sessionId, opts)               => api.post("/auction/sell", { sessionId, ...opts }).then(r => r.data),
-  markUnsold:   (sessionId)                     => api.post("/auction/mark-unsold", { sessionId }).then(r => r.data),
-  advanceRound: (sessionId)                     => api.post("/auction/advance-round", { sessionId }).then(r => r.data),
-  complete:     (sessionId)                     => api.post("/auction/complete", { sessionId }).then(r => r.data),
-  setBidder:    (sessionId, teamId)              => api.post("/auction/set-bidder", { sessionId, teamId }).then(r => r.data),
-  reduceBid:    (sessionId)                      => api.post("/auction/reduce-bid", { sessionId }).then(r => r.data),
-  extraTime:    (sessionId)                      => api.post("/auction/extra-time", { sessionId }).then(r => r.data),
-  undoLastSale: (sessionId)                      => api.post("/auction/undo-last-sale", { sessionId }).then(r => r.data),
-  deleteSession: (sessionId)                     => api.delete(`/auction/${sessionId}`).then(r => r.data),
-  enter:        (sessionId)                      => api.post("/auction/enter", { sessionId }).then(r => r.data),
-  leave:        (sessionId)                      => api.post("/auction/leave", { sessionId }).then(r => r.data),
 }

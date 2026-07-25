@@ -1,8 +1,6 @@
 import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
-import { createServer } from "http"
-import { Server as SocketIOServer } from "socket.io"
 dotenv.config()
 
 import authRoutes     from "./routes/auth.js"
@@ -15,9 +13,8 @@ import lineupRoutes   from "./routes/lineup.js"
 import favoriteRoutes from "./routes/favorites.js"
 import uclRoutes      from "./routes/ucl.js"
 import weeklyRoutes      from "./routes/weekly.js"
+import quickTournamentRoutes from "./routes/quickTournament.js"
 import uclKnockoutRoutes from "./routes/uclKnockout.js"
-import auctionRoutes     from "./routes/auction.js"
-import { setSocketServer } from "./services/socket.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 
 const app  = express()
@@ -49,8 +46,8 @@ app.use("/api/lineups",  lineupRoutes)
 app.use("/api/favorites", favoriteRoutes)
 app.use("/api/ucl",    uclRoutes)
 app.use("/api/weekly",       weeklyRoutes)
+app.use("/api/quick-tournament", quickTournamentRoutes)
 app.use("/api/ucl-knockout", uclKnockoutRoutes)
-app.use("/api/auction",      auctionRoutes)
 
 // GET /api/settings — public app settings (current season etc.)
 app.get("/api/settings", async (_req, res) => {
@@ -81,7 +78,7 @@ app.patch("/api/settings", authenticate, adminOnly, async (req, res) => {
 // full corrected JS formula (both sides + BDR). Hit once after deploying the
 // marketValue.js fix to correct stale MVs. Admin auth required.
 import { query } from "./db/pool.js"
-import { recalcMarketValue } from "./services/marketValue.js"
+import { recalcMarketValue, recalcBdrFromMatches, recalcBestPlayer } from "./services/marketValue.js"
 import { authenticate, adminOnly } from "./middleware/auth.js"
 
 app.post("/admin/recalc-mv", authenticate, adminOnly, async (req, res) => {
@@ -103,9 +100,11 @@ app.post("/admin/recalc-mv", authenticate, adminOnly, async (req, res) => {
 
     for (const id of ids) {
       await recalcMarketValue(id)
+      await recalcBdrFromMatches(id)
+      await recalcBestPlayer(id)
     }
 
-    res.json({ success: true, updated: ids.length, message: `Recalculated MV for ${ids.length} players` })
+    res.json({ success: true, updated: ids.length, message: `Recalculated MV, BDR, and Best Player for ${ids.length} players` })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -151,26 +150,8 @@ app.use((_req, res) => res.status(404).json({ error: "Route not found" }))
 // Global error handler (must be last)
 app.use(errorHandler)
 
-const httpServer = createServer(app)
-
-// Socket.IO — used specifically for real-time auction sync (bids, sales,
-// new players coming up) so every connected screen updates the instant
-// something happens, instead of waiting on a polling interval. Same CORS
-// origin as the REST API.
-const io = new SocketIOServer(httpServer, {
-  cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
-  },
-})
-setSocketServer(io)
-io.on("connection", (socket) => {
-  if (process.env.NODE_ENV === "development") console.log(`[socket] client connected: ${socket.id}`)
-})
-
-httpServer.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`\n🚀 Server running on port ${PORT}`)
   console.log(`   Env: ${process.env.NODE_ENV || "development"}`)
   console.log(`   DB:  ${process.env.DATABASE_URL ? "connected" : "⚠️  DATABASE_URL not set"}`)
-  console.log(`   WebSocket: ready`)
 })

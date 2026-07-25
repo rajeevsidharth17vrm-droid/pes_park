@@ -1,13 +1,16 @@
+import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { BarChart2, Shield, LogIn, LogOut, Users, Trophy } from "lucide-react"
+import { BarChart2, Shield, LogIn, LogOut, Users, Trophy, Gavel, Menu } from "lucide-react"
 import { useAuthStore } from "../../store/authStore"
 import { cn } from "../../lib/utils"
+import MobileMenu from "./MobileMenu"
 
 export default function Navbar() {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
   const user         = useAuthStore(s => s.user)
   const logout       = useAuthStore(s => s.logout)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -15,15 +18,26 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-surface-border bg-pitch-900/90 backdrop-blur-md">
+    <>
+    <header className="sticky top-0 z-50 border-b border-surface-border bg-pitch-900/90 backdrop-blur-md relative">
+      {/* Hamburger — pinned to the true left edge of the page, independent of the
+          centered max-w-7xl content below (which leaves empty space on wide screens) */}
+      <button
+        onClick={() => setMenuOpen(true)}
+        className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-surface transition-colors"
+        aria-label="Open menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
 
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group min-w-0 flex-shrink-0">
+        <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group min-w-0 flex-shrink-0 ml-11 sm:ml-12">
           <img src="/logo.png" alt="TEC Logo" className="w-9 h-9 sm:w-14 sm:h-14 rounded-lg object-cover flex-shrink-0" />
           <div className="flex flex-col leading-none min-w-0">
-            <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">Tamil</span>
-            <span className="text-[10px] sm:text-xs text-accent font-semibold tracking-widest uppercase truncate">Efootballers</span>
+            <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">Pes Park</span>
+            <span className="text-[10px] sm:text-xs text-accent font-semibold tracking-widest uppercase truncate">Efootball Community</span>
           </div>
         </Link>
 
@@ -31,6 +45,7 @@ export default function Navbar() {
         <nav className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
           <NavLink to="/" label="Dashboard" icon={BarChart2} active={pathname === "/"} />
           <NavLink to="/hall-of-fame" label="Hall of Fame" icon={Trophy} active={pathname === "/hall-of-fame"} />
+          <NavLink to="/auction" label="Auction" icon={Gavel} active={pathname === "/auction"} />
 
           {!user && (
             <NavLink to="/login" label="Login" icon={LogIn} active={pathname === "/login"} />
@@ -56,6 +71,9 @@ export default function Navbar() {
         </nav>
       </div>
     </header>
+
+    <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+    </>
   )
 }
 

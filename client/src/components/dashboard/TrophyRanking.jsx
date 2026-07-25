@@ -16,9 +16,11 @@ const TROPHY_OPTIONS = [
   { value: "trophy2Count", label: "Team League",           image: teamLeagueTrophy   },
   { value: "trophy4Count", label: "UCL",                   image: uclTrophy          },
   { value: "trophy3Count", label: "Weekly",                image: weeklyTrophy       },
+  { value: "trophy8Count", label: "Quick Tournament",      image: weeklyTrophy       },
   { value: "trophy5Count", label: "Weekly Golden Boot",    image: goldenBootTrophy   },
   { value: "trophy6Count", label: "Team League Golden Boot", image: teamLeagueGBTrophy },
   { value: "trophy7Count", label: "UCL Golden Boot",       image: uclGBTrophy        },
+  { value: "trophy9Count", label: "Quick Tournament Golden Boot", image: goldenBootTrophy },
 ]
 
 export default function TrophyRanking({ players, onPlayerClick, trophyKey: controlledKey, onTrophyChange }) {

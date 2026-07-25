@@ -8,12 +8,14 @@ const MATCH_TYPES = [
   { value: "league", label: "Team League" },
   { value: "ucl",    label: "UCL"         },
   { value: "weekly", label: "Weekly"      },
+  { value: "quick",  label: "Quick Tournament" },
 ]
 
 const MATCH_TYPE_COLORS = {
   league: "text-accent bg-accent/10 border-accent/25",
   ucl:    "text-violet-400 bg-violet-400/10 border-violet-400/25",
   weekly: "text-amber-400 bg-amber-400/10 border-amber-400/25",
+  quick:  "text-emerald-400 bg-emerald-400/10 border-emerald-400/25",
 }
 
 function ToggleBtn({ value, selected, onChange, label, color }) {

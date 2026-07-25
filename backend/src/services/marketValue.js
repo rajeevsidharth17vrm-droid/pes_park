@@ -1,178 +1,154 @@
 /**
- * marketValue.js — single source of truth for calculating a player's market value.
+ * marketValue.js — NEW simple flat-rate market value calculation.
  *
- * This replaces reliance on the DB's compute_market_value() SQL function. That
- * function still exists and its trigger still fires automatically on
- * match_records changes, but every code path below explicitly overwrites
- * whatever the trigger set, so the SQL function's output is never the final
- * answer — this file's calculateMarketValue() is. This means changing the
- * formula only ever requires editing this file — never a DB migration or
- * manual SQL. (NOTE: as of this version, the SQL trigger's own formula was
- * NOT updated to match this file's draw/loss matrix, season-scoping, or
- * trophy bonuses — it's still on the older simple table. Since its output is
- * always overwritten before it's ever read, this has no user-visible effect,
- * but flagging it in case it ever needs to be brought back in sync.)
+ * Per match, from the player's perspective:
+ *   Win:  MV +15, BDR +5, Best Player +3
+ *   Draw: MV  0,  BDR +1, Best Player +1
+ *   Loss: MV -10, BDR -3, Best Player  0
+ *   Per goal scored: MV +3, BDR +1, Best Player 0
  *
- * Formula — EVERYTHING here is scoped to the CURRENT season only (matches,
- * BDR points, and trophies alike), so "Start New Season" genuinely gives
- * every player a clean slate across the whole formula, not just part of it:
- *   1. WIN value depends only on the opponent's grade (unchanged — beating a
- *      tougher opponent is worth more, regardless of your own grade).
- *   2. DRAW and LOSS values depend on BOTH the player's own grade AND the
- *      opponent's grade (a full grade x grade matrix, see below).
- *   3. Only match_records from the CURRENT season_number count at all.
- *   4. ew scales directly with the summed weighted total (ewRaw), uncapped.
- *   5. pp = ew * 3, winPct = ew / 14 (scaling reference only)
- *   6. matchValue = min(pp * 5 + winPct * 85, MATCH_VALUE_CEILING) — the
- *      match-performance component alone is capped at 450.
- *   7. BDR swing — scaled by the player's current bdr_points (itself already
- *      reset to 0 on a season reset), uncapped, only applies once the player
- *      has a positive effective-win score this season (ewRaw > 0).
- *   8. mvRaw = matchValue + bdrSwing
- *   9. Base value = max(50, round to nearest 5) — but ONLY if the player has
- *      played at least one match THIS season. Zero matches this season ->
- *      market value is 0, a genuine fresh start, regardless of past seasons.
- *  10. Trophy bonus — added ON TOP of the base value, from trophies won
- *      THIS season only (player_trophies, season-scoped) — the lifetime
- *      trophy1Count..trophy7Count columns never affect this, they're purely
- *      the career Trophy Case display.
- *  11. Final value = base value + trophy bonus.
+ * Market value is recalculated from scratch (sum of all match deltas for
+ * the current season), floored at 0. BDR and best_player_points are
+ * applied incrementally per match (see records route).
  */
 import { query } from "../db/pool.js"
 
-// Win value depends only on the opponent's grade — unchanged, same for every player.
-const WIN_WEIGHT = { S: 1.5, A: 0.9, B: 0.7, C: 0.6 }
+// ── Flat delta tables ────────────────────────────────────────────────────────
+export const MV_DELTA  = { win: 15, draw: 0, loss: -10 }
+export const BDR_DELTA = { win: 5,  draw: 1, loss: -3  }
+export const BP_DELTA  = { win: 3,  draw: 1, loss: 0   }
 
-// Draw/loss value depends on BOTH the player's own grade (outer key) and the
-// opponent's grade (inner key). Reading DRAW_MATRIX.S.C means "an S-grade
-// player drawing against a C-grade opponent".
-const DRAW_MATRIX = {
-  S: { S: 0.2, A: 0.2, B: -0.5, C: -0.8 },
-  A: { S: 0.5, A: 0.4, B: -0.3, C: -0.4 },
-  B: { S: 0.7, A: 0.6, B: 0.4,  C: -0.2 },
-  C: { S: 0.9, A: 0.8, B: 0.6,  C: 0.3  },
-}
+export const MV_PER_GOAL  = 3
+export const BDR_PER_GOAL = 1
+export const BP_PER_GOAL  = 0  // goals don't count for best player (counted in golden boot)
 
-const LOSS_MATRIX = {
-  S: { S: -0.5, A: -0.7,  B: -1.0, C: -1.5 },
-  A: { S: -0.4, A: -0.75, B: -0.7, C: -1.0 },
-  B: { S: -0.4, A: -0.6,  B: -0.4, C: -0.7 },
-  C: { S: -0.3, A: -0.4,  B: -0.3, C: -0.7 },
-}
-
-const BDR_SWING_RATE      = 18 / 120 // halved from the previous 36/120 rate, still uncapped
-const MATCH_VALUE_CEILING = 450      // ceiling on match-performance only, not the final total
-
-// One-time bonus per trophy a player has won IN THE CURRENT SEASON ONLY,
-// added after everything else. Reads from player_trophies (season-scoped),
-// NOT the lifetime trophy1Count..trophy7Count columns on players — those
-// stay purely a career/Trophy-Case display and never affect market value
-// directly. (trophy1Count/Ballon d'Or intentionally excluded from bonuses —
-// already reflected via BDR.)
-const TROPHY_BONUS = {
-  trophy2_count: 25, // Team League
-  trophy4_count: 20, // UCL
-  trophy3_count: 15, // Weekly
-  trophy6_count: 15, // Team League Golden Boot
-  trophy7_count: 10, // UCL Golden Boot
-  trophy5_count: 5,  // Weekly Golden Boot
-}
-
-function resultWeight(result, ownGrade, opponentGrade) {
-  if (result === "win")  return WIN_WEIGHT[opponentGrade] ?? 0
-  if (result === "draw") return DRAW_MATRIX[ownGrade]?.[opponentGrade] ?? 0
-  if (result === "loss") return LOSS_MATRIX[ownGrade]?.[opponentGrade] ?? 0
-  return 0
-}
-
+// ── Helpers ──────────────────────────────────────────────────────────────────
 async function getCurrentSeason() {
   const r = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
   return parseInt(r.rows[0]?.value || "6")
 }
 
-// Computes the market value a player SHOULD have right now, based ENTIRELY
-// on the CURRENT season — their match_records from this season only, their
-// current bdr_points (already season-scoped since it's reset on season
-// start), and trophies won this season only. Does not check whether the
-// player has played at all this season — call recalcMarketValue() below for
-// that, which handles the zero-involvement-this-season case.
-export async function calculateMarketValue(playerId) {
-  const currentSeason = await getCurrentSeason()
-
-  const [matchesRes, playerRes] = await Promise.all([
-    query(
-      `SELECT
-         CASE
-           WHEN player_id = $1 THEN result
-           WHEN result = 'win'  THEN 'loss'
-           WHEN result = 'loss' THEN 'win'
-           ELSE 'draw'
-         END AS result,
-         CASE
-           WHEN player_id = $1 THEN opponent_grade
-           ELSE (SELECT grade FROM players WHERE id = player_id)
-         END AS opponent_grade
-       FROM match_records
-       WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
-      [playerId, currentSeason]
-    ),
-    query("SELECT bdr_points AS bdr, grade FROM players WHERE id = $1", [playerId]),
-  ])
-
-  const player = playerRes.rows[0] ?? {}
-  const ownGrade = player.grade ?? "C"
-
-  let ewRaw = 0
-  for (const m of matchesRes.rows) {
-    ewRaw += resultWeight(m.result, ownGrade, m.opponent_grade)
-  }
-
-  const ew            = Math.max(ewRaw, 0)
-  const pp             = ew * 3
-  const winPct         = Math.max(ew / 14, 0)
-  const matchValueRaw  = pp * 5 + winPct * 85
-  const matchValue     = Math.min(matchValueRaw, MATCH_VALUE_CEILING) // ceiling here only
-
-  const bdrPoints = player.bdr ?? 0
-  const bdrSwing  = ewRaw > 0 ? bdrPoints * BDR_SWING_RATE : 0 // uncapped, added after the ceiling
-
-  const mvRaw = matchValue + bdrSwing
-  const baseValue = Math.max(50, Math.round(mvRaw / 5) * 5)
-
-  const seasonTrophiesRes = await query(
-    `SELECT trophy_column, COUNT(*)::int AS count
-     FROM player_trophies
-     WHERE player_id = $1 AND season_number = $2
-     GROUP BY trophy_column`,
-    [playerId, currentSeason]
-  )
-
-  let trophyBonus = 0
-  for (const row of seasonTrophiesRes.rows) {
-    const bonus = TROPHY_BONUS[row.trophy_column]
-    if (bonus) trophyBonus += row.count * bonus
-  }
-
-  return baseValue + trophyBonus
+/**
+ * Compute the MV delta for a single match from one player's perspective.
+ */
+export function matchMvDelta(result, goalsScored) {
+  return (MV_DELTA[result] ?? 0) + (goalsScored ?? 0) * MV_PER_GOAL
 }
 
-// Recalculates and persists a player's market_value. If the player has zero
-// match involvement in the CURRENT SEASON (regardless of past seasons),
-// resets to 0 — a genuine fresh-season baseline. Otherwise computes via
-// calculateMarketValue() (which itself is fully season-scoped) and saves it.
+/**
+ * Compute the BDR delta for a single match from one player's perspective.
+ */
+export function matchBdrDelta(result, goalsScored) {
+  return (BDR_DELTA[result] ?? 0) + (goalsScored ?? 0) * BDR_PER_GOAL
+}
+
+/**
+ * Compute the Best Player delta for a single match from one player's perspective.
+ */
+export function matchBpDelta(result) {
+  return BP_DELTA[result] ?? 0
+}
+
+/**
+ * Recalculates and persists a player's market_value from ALL their match
+ * records in the current season. Pure sum of flat deltas, floored at 0.
+ */
 export async function recalcMarketValue(playerId) {
   const currentSeason = await getCurrentSeason()
 
-  const countRes = await query(
-    "SELECT COUNT(*)::int AS count FROM match_records WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2",
+  // Get every match this player was involved in this season, from THEIR perspective
+  const matchesRes = await query(
+    `SELECT
+       CASE
+         WHEN player_id = $1 THEN result
+         WHEN result = 'win'  THEN 'loss'
+         WHEN result = 'loss' THEN 'win'
+         ELSE 'draw'
+       END AS result,
+       CASE
+         WHEN player_id = $1 THEN player_score
+         ELSE opponent_score
+       END AS goals
+     FROM match_records
+     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
     [playerId, currentSeason]
   )
 
-  if (countRes.rows[0].count === 0) {
-    await query("UPDATE players SET market_value = 0 WHERE id = $1", [playerId])
-    return
+  let totalMv = 0
+  for (const m of matchesRes.rows) {
+    totalMv += matchMvDelta(m.result, m.goals ?? 0)
   }
 
-  const mv = await calculateMarketValue(playerId)
-  await query("UPDATE players SET market_value = $1 WHERE id = $2", [mv, playerId])
+  const finalMv = Math.max(0, totalMv)
+  await query("UPDATE players SET market_value = $1 WHERE id = $2", [finalMv, playerId])
+}
+
+/**
+ * Recalculates a player's best_player_points from ALL their match records
+ * in the current season. Pure sum of flat deltas, floored at 0.
+ */
+export async function recalcBestPlayer(playerId) {
+  const currentSeason = await getCurrentSeason()
+
+  const matchesRes = await query(
+    `SELECT
+       CASE
+         WHEN player_id = $1 THEN result
+         WHEN result = 'win'  THEN 'loss'
+         WHEN result = 'loss' THEN 'win'
+         ELSE 'draw'
+       END AS result
+     FROM match_records
+     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
+    [playerId, currentSeason]
+  )
+
+  let totalBp = 0
+  for (const m of matchesRes.rows) {
+    totalBp += matchBpDelta(m.result)
+  }
+
+  await query(
+    "UPDATE players SET best_player_points = COALESCE($1, 0) WHERE id = $2",
+    [Math.max(0, totalBp), playerId]
+  )
+}
+
+/**
+ * Recalculates a player's bdr_points from ALL their match records in
+ * the current season. Floored at 0. NOTE: this only covers match-based
+ * BDR — tournament BDR (quick tournament awards etc.) is added separately
+ * via addBdr() and is NOT included here. Call this only for full recalcs
+ * (admin bulk recalc, season reset), not after individual matches —
+ * individual matches use incremental addBdr() to preserve tournament BDR.
+ */
+export async function recalcBdrFromMatches(playerId) {
+  const currentSeason = await getCurrentSeason()
+
+  const matchesRes = await query(
+    `SELECT
+       CASE
+         WHEN player_id = $1 THEN result
+         WHEN result = 'win'  THEN 'loss'
+         WHEN result = 'loss' THEN 'win'
+         ELSE 'draw'
+       END AS result,
+       CASE
+         WHEN player_id = $1 THEN player_score
+         ELSE opponent_score
+       END AS goals
+     FROM match_records
+     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
+    [playerId, currentSeason]
+  )
+
+  let totalBdr = 0
+  for (const m of matchesRes.rows) {
+    totalBdr += matchBdrDelta(m.result, m.goals ?? 0)
+  }
+
+  await query(
+    "UPDATE players SET bdr_points = GREATEST(0, $1) WHERE id = $2",
+    [totalBdr, playerId]
+  )
 }

@@ -18,6 +18,7 @@ export default function CreatePlayer({ onSuccess }) {
   const [trophy2, setTrophy2]           = useState("")
   const [trophy3, setTrophy3]           = useState("")
   const [trophy4, setTrophy4]           = useState("")
+  const [trophy8, setTrophy8]           = useState("")
   const [imageFile, setImageFile]       = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [done, setDone]                 = useState(null)
@@ -50,6 +51,7 @@ export default function CreatePlayer({ onSuccess }) {
         trophy2Count: parseInt(trophy2) || 0,
         trophy3Count: parseInt(trophy3) || 0,
         trophy4Count: parseInt(trophy4) || 0,
+        trophy8Count: parseInt(trophy8) || 0,
       },
       {
         onSuccess: async (data) => {
@@ -231,6 +233,7 @@ export default function CreatePlayer({ onSuccess }) {
               { label: "Team League", value: trophy2, onChange: setTrophy2 },
               { label: "UCL",         value: trophy4, onChange: setTrophy4 },
               { label: "Weekly",      value: trophy3, onChange: setTrophy3 },
+              { label: "Quick Tournament", value: trophy8, onChange: setTrophy8 },
             ].map(t => (
               <div key={t.label}>
                 <input

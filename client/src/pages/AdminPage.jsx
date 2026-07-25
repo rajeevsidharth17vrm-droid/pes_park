@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { LayoutDashboard, Users, Activity, Calendar, ArrowLeftRight, Shield, Settings, AlertTriangle, RotateCcw, Trophy, Gavel } from "lucide-react"
+import { LayoutDashboard, Users, Activity, Calendar, ArrowLeftRight, Shield, Settings, AlertTriangle, RotateCcw, Trophy } from "lucide-react"
 import Layout from "../components/layout/Layout"
 import AdminOverview from "../components/admin/AdminOverview"
 import PlayerManagement from "../components/admin/PlayerManagement"
@@ -14,6 +14,7 @@ import UclGroupsAdmin from "../components/admin/UclGroupsAdmin"
 import UclResults from "../components/admin/UclResults"
 import UclKnockoutAdmin from "../components/admin/UclKnockoutAdmin"
 import WeeklyAdmin from "../components/admin/WeeklyTournament"
+import QuickTournamentAdmin from "../components/admin/QuickTournament"
 import Loading from "../components/common/Loading"
 import { usePlayers, useRecords, useFixtures, useTrades } from "../lib/queries"
 import { teamsApi } from "../lib/api"
@@ -263,10 +264,10 @@ const TABS = [
   { id: "uclresults",   label: "UCL Results",   icon: Trophy },
   { id: "uclknockout",  label: "UCL Knockout",  icon: Trophy },
   { id: "weekly",     label: "Weekly",       icon: Trophy          },
+  { id: "quicktournament", label: "Quick Tournament", icon: Trophy  },
   { id: "fixtures",   label: "Fixtures",     icon: Calendar        },
   { id: "teamresults",label: "Team Results", icon: Users           },
   { id: "trades",     label: "Trades",       icon: ArrowLeftRight  },
-  { id: "auction",    label: "Auction",      icon: Gavel, href: "/admin/auction" },
 ]
 
 export default function AdminPage() {
@@ -409,6 +410,9 @@ export default function AdminPage() {
         {activeTab === "uclknockout" && <UclKnockoutAdmin />}
         {activeTab === "weekly" && (
           <WeeklyAdmin />
+        )}
+        {activeTab === "quicktournament" && (
+          <QuickTournamentAdmin />
         )}
         {activeTab === "fixtures" && !isLoading && (
           <FixtureResults fixtures={fixtures} />

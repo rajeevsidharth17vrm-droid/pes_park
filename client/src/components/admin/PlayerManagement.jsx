@@ -24,6 +24,8 @@ function EditableRow({ player, onPlayerClick }) {
   const [trophy5, setTrophy5] = useState(player.trophy5Count ?? 0)
   const [trophy6, setTrophy6] = useState(player.trophy6Count ?? 0)
   const [trophy7, setTrophy7] = useState(player.trophy7Count ?? 0)
+  const [trophy8, setTrophy8] = useState(player.trophy8Count ?? 0)
+  const [trophy9, setTrophy9] = useState(player.trophy9Count ?? 0)
   const [confirmDel, setConfirmDel]   = useState(false)
   const updatePlayer                  = useUpdatePlayer()
   const deletePlayer                  = useDeletePlayer()
@@ -51,6 +53,8 @@ function EditableRow({ player, onPlayerClick }) {
     if (trophy5 !== (player.trophy5Count ?? 0)) body.trophy5Count = trophy5
     if (trophy6 !== (player.trophy6Count ?? 0)) body.trophy6Count = trophy6
     if (trophy7 !== (player.trophy7Count ?? 0)) body.trophy7Count = trophy7
+    if (trophy8 !== (player.trophy8Count ?? 0)) body.trophy8Count = trophy8
+    if (trophy9 !== (player.trophy9Count ?? 0)) body.trophy9Count = trophy9
     if (!Object.keys(body).length) return setEditing(false)
     updatePlayer.mutate({ id: player.id, ...body }, {
       onSuccess: () => { setEditing(false); setBdrDelta("") },
@@ -74,6 +78,8 @@ function EditableRow({ player, onPlayerClick }) {
     setTrophy5(player.trophy5Count ?? 0)
     setTrophy6(player.trophy6Count ?? 0)
     setTrophy7(player.trophy7Count ?? 0)
+    setTrophy8(player.trophy8Count ?? 0)
+    setTrophy9(player.trophy9Count ?? 0)
   }
 
   const handleDelete = () => {
@@ -292,9 +298,11 @@ function EditableRow({ player, onPlayerClick }) {
                 { label: "Team League",             value: trophy2, onChange: setTrophy2 },
                 { label: "UCL",                     value: trophy4, onChange: setTrophy4 },
                 { label: "Weekly",                  value: trophy3, onChange: setTrophy3 },
+                { label: "Quick Tournament",         value: trophy8, onChange: setTrophy8 },
                 { label: "Weekly Golden Boot",      value: trophy5, onChange: setTrophy5 },
                 { label: "Team League Golden Boot", value: trophy6, onChange: setTrophy6 },
                 { label: "UCL Golden Boot",         value: trophy7, onChange: setTrophy7 },
+                { label: "Quick Tournament Golden Boot", value: trophy9, onChange: setTrophy9 },
               ].map(t => (
                 <div key={t.label} className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">{t.label}</span>

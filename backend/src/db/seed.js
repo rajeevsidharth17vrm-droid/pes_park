@@ -123,15 +123,15 @@ async function seed() {
     }
     console.log("  ✓ Fixtures")
 
-    // ── Trade requests ───────────────────────────────────────────────────────
+// ── Trade requests ───────────────────────────────────────────────────────
     await q(`
-      INSERT INTO trade_requests (player_id, from_team_id, to_team_id, status)
+      INSERT INTO trade_requests (player_id, from_team_id, to_team_id, trade_type, status)
       VALUES
-        ($1, $2, $3, 'pending'),
-        ($4, $5, $6, 'pending'),
-        ($7, $8, $9, 'rejected'),
-        ($10, $11, $12, 'pending'),
-        ($13, $14, $15, 'approved')
+        ($1, $2, $3, 'player_swap', 'pending_team'),
+        ($4, $5, $6, 'player_swap', 'pending_admin'),
+        ($7, $8, $9, 'player_swap', 'rejected_by_team'),
+        ($10, $11, $12, 'player_swap', 'pending_team'),
+        ($13, $14, $15, 'player_swap', 'approved')
       ON CONFLICT DO NOTHING
     `, [
       playerId["Rahul Menon"],   teamId["Nexus FC"],      teamId["Phantom United"],

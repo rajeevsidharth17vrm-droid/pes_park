@@ -99,6 +99,7 @@ function PlayerCard({ data, side, onPlayerClick }) {
           <div className="flex justify-between"><span className="text-slate-400">League W/D/L</span><span className="text-white font-semibold">{s?.leagueWins ?? 0}/{s?.leagueDraws ?? 0}/{s?.leagueLosses ?? 0}</span></div>
           <div className="flex justify-between"><span className="text-slate-400">UCL W/D/L</span><span className="text-white font-semibold">{s?.uclWins ?? 0}/{s?.uclDraws ?? 0}/{s?.uclLosses ?? 0}</span></div>
           <div className="flex justify-between"><span className="text-slate-400">Weekly W/D/L</span><span className="text-white font-semibold">{s?.weeklyWins ?? 0}/{s?.weeklyDraws ?? 0}/{s?.weeklyLosses ?? 0}</span></div>
+          <div className="flex justify-between"><span className="text-slate-400">Quick Tournament W/D/L</span><span className="text-white font-semibold">{s?.quickWins ?? 0}/{s?.quickDraws ?? 0}/{s?.quickLosses ?? 0}</span></div>
           {trophyTotal > 0 && (
             <>
               <div className="flex justify-between pt-1 border-t border-surface-border/30">
@@ -225,6 +226,9 @@ export default function PlayerComparison({ onPlayerClick }) {
             <StatBar label="Weekly Wins"   a={sA.weeklyWins} b={sB.weeklyWins} />
             <StatBar label="Weekly Draws"  a={sA.weeklyDraws} b={sB.weeklyDraws} />
             <StatBar label="Weekly Losses" a={sA.weeklyLosses} b={sB.weeklyLosses} higherIsBetter={false} />
+            <StatBar label="Quick Tournament Wins"   a={sA.quickWins} b={sB.quickWins} />
+            <StatBar label="Quick Tournament Draws"  a={sA.quickDraws} b={sB.quickDraws} />
+            <StatBar label="Quick Tournament Losses" a={sA.quickLosses} b={sB.quickLosses} higherIsBetter={false} />
           </div>
         </>
       )}

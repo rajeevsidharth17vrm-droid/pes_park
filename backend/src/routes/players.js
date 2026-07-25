@@ -102,6 +102,8 @@ const createSchema = z.object({
   trophy5Count:  z.number().int().min(0).optional().default(0),
   trophy6Count:  z.number().int().min(0).optional().default(0),
   trophy7Count:  z.number().int().min(0).optional().default(0),
+  trophy8Count:  z.number().int().min(0).optional().default(0),
+  trophy9Count:  z.number().int().min(0).optional().default(0),
 }).refine(d => d.isCaptain || d.auctionPrice !== undefined, {
   message: "Auction price is required unless the player is a captain",
   path: ["auctionPrice"],
@@ -111,7 +113,7 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
   try {
     const {
       name, alias, teamId, grade, isCaptain, auctionPrice,
-      trophy1Count, trophy2Count, trophy3Count, trophy4Count,
+      trophy1Count, trophy2Count, trophy3Count, trophy4Count, trophy8Count,
     } = createSchema.parse(req.body)
 
     // Captains have no auction price — stored as 0.
@@ -123,9 +125,9 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
     const result = await query(`
       INSERT INTO players (
         name, alias, team_id, grade, is_captain, auction_price, market_value,
-        trophy1_count, trophy2_count, trophy3_count, trophy4_count
+        trophy1_count, trophy2_count, trophy3_count, trophy4_count, trophy8_count
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id, name, alias, grade,
                 image_url     AS "imageUrl",
                 is_captain    AS "isCaptain",
@@ -136,11 +138,12 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
                 trophy1_count AS "trophy1Count",
                 trophy2_count AS "trophy2Count",
                 trophy3_count AS "trophy3Count",
-                trophy4_count AS "trophy4Count"
+                trophy4_count AS "trophy4Count",
+                trophy8_count AS "trophy8Count"
     `, [
       name, alias || null, teamId ?? null, grade, isCaptain,
       finalAuctionPrice, finalMarketValue,
-      trophy1Count, trophy2Count, trophy3Count, trophy4Count,
+      trophy1Count, trophy2Count, trophy3Count, trophy4Count, trophy8Count,
     ])
     res.status(201).json(result.rows[0])
   } catch (err) { next(err) }
@@ -163,6 +166,8 @@ const updateSchema = z.object({
   trophy5Count:  z.number().int().min(0).optional(),
   trophy6Count:  z.number().int().min(0).optional(),
   trophy7Count:  z.number().int().min(0).optional(),
+  trophy8Count:  z.number().int().min(0).optional(),
+  trophy9Count:  z.number().int().min(0).optional(),
 }).refine(d => Object.values(d).some(v => v !== undefined), {
   message: "Provide at least one field to update",
 })
@@ -220,6 +225,7 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
     const {
       name, alias, grade, bdrDelta, isCaptain, auctionPrice, teamId, imageUrl,
       trophy1Count, trophy2Count, trophy3Count, trophy4Count, trophy5Count, trophy6Count, trophy7Count,
+      trophy8Count, trophy9Count,
     } = updateSchema.parse(req.body)
 
     // teamId needs special handling: undefined = don't change, null = remove team
@@ -246,7 +252,9 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
         trophy4_count = COALESCE($12, trophy4_count),
         trophy5_count = COALESCE($13, trophy5_count),
         trophy6_count = COALESCE($14, trophy6_count),
-        trophy7_count = COALESCE($15, trophy7_count)
+        trophy7_count = COALESCE($15, trophy7_count),
+        trophy8_count = COALESCE($18, trophy8_count),
+        trophy9_count = COALESCE($19, trophy9_count)
       WHERE id = $16
       RETURNING id, name, alias, grade,
                 image_url     AS "imageUrl",
@@ -261,7 +269,9 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
                 trophy4_count AS "trophy4Count",
                 trophy5_count AS "trophy5Count",
                 trophy6_count AS "trophy6Count",
-                trophy7_count AS "trophy7Count"
+                trophy7_count AS "trophy7Count",
+                trophy8_count AS "trophy8Count",
+                trophy9_count AS "trophy9Count"
     `, [
       name ?? null, alias ?? null, grade ?? null,
       bdrDelta ?? null, isCaptain ?? null, auctionPriceValue,
@@ -270,6 +280,7 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
       trophy4Count ?? null, trophy5Count ?? null,
       trophy6Count ?? null, trophy7Count ?? null,
       req.params.id, teamIdProvided,
+      trophy8Count ?? null, trophy9Count ?? null,
     ])
 
     if (!result.rows[0]) return res.status(404).json({ error: "Player not found" })
@@ -333,7 +344,7 @@ router.get("/:id/compare-stats", async (req, res, next) => {
       `, [req.params.id]),
       query(`
         SELECT trophy1_count, trophy2_count, trophy3_count, trophy4_count,
-               trophy5_count, trophy6_count, trophy7_count
+               trophy5_count, trophy6_count, trophy7_count, trophy8_count, trophy9_count
         FROM players WHERE id = $1
       `, [req.params.id]),
     ])
@@ -350,6 +361,7 @@ router.get("/:id/compare-stats", async (req, res, next) => {
     const leagueMatches = matches.filter(m => m.match_type === "league")
     const uclMatches    = matches.filter(m => m.match_type === "ucl")
     const weeklyMatches = matches.filter(m => m.match_type === "weekly")
+    const quickMatches  = matches.filter(m => m.match_type === "quick")
 
     const trophyRow = trophyRes.rows[0] ?? {}
     const trophies = {
@@ -360,6 +372,8 @@ router.get("/:id/compare-stats", async (req, res, next) => {
       trophy5_count: trophyRow.trophy5_count ?? 0,
       trophy6_count: trophyRow.trophy6_count ?? 0,
       trophy7_count: trophyRow.trophy7_count ?? 0,
+      trophy8_count: trophyRow.trophy8_count ?? 0,
+      trophy9_count: trophyRow.trophy9_count ?? 0,
     }
 
     res.json({
@@ -384,6 +398,11 @@ router.get("/:id/compare-stats", async (req, res, next) => {
         weeklyDraws:   weeklyMatches.filter(m => m.result === "draw").length,
         weeklyLosses:  weeklyMatches.filter(m => m.result === "loss").length,
         weeklyGoals:   weeklyMatches.reduce((s, m) => s + (m.goals_scored ?? 0), 0),
+        quickMatches:  quickMatches.length,
+        quickWins:     quickMatches.filter(m => m.result === "win").length,
+        quickDraws:    quickMatches.filter(m => m.result === "draw").length,
+        quickLosses:   quickMatches.filter(m => m.result === "loss").length,
+        quickGoals:    quickMatches.reduce((s, m) => s + (m.goals_scored ?? 0), 0),
         trophies,
       },
     })
@@ -424,12 +443,15 @@ router.get("/:id/performance-zones", async (req, res, next) => {
             WHEN 'league' THEN CONCAT('TL R', COALESCE(f.round::text, '?'))
             WHEN 'ucl'    THEN 'UCL'
             WHEN 'weekly' THEN COALESCE(wt.name, 'Weekly')
+            WHEN 'quick'  THEN COALESCE(qt.name, 'Quick Tournament')
             ELSE mr.match_type::text
           END AS label
         FROM match_records mr
         LEFT JOIN fixtures f ON f.id = mr.fixture_id AND mr.match_type::text = 'league'
         LEFT JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.id
         LEFT JOIN weekly_tournaments wt ON wt.id = wtm.tournament_id
+        LEFT JOIN quick_tournament_matches qtm ON qtm.match_record_id = mr.id
+        LEFT JOIN quick_tournaments qt ON qt.id = qtm.tournament_id
         WHERE (mr.player_id=$1 OR mr.opponent_id=$1) AND mr.season_number=$2
         ORDER BY mr.recorded_at ASC
       `, [req.params.id, seasonNum])

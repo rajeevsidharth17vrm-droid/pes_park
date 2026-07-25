@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { teamsApi, playersApi, recordsApi, fixturesApi, tradesApi, lineupsApi, favoritesApi, settingsApi, leagueInfoApi, uclApi, weeklyApi, uclKnockoutApi, auctionApi } from "./api"
+import { teamsApi, playersApi, recordsApi, fixturesApi, tradesApi, lineupsApi, favoritesApi, settingsApi, leagueInfoApi, uclApi, weeklyApi, quickTournamentApi, uclKnockoutApi } from "./api"
 
 export const QK = {
   teams:    ["teams"],
@@ -82,6 +82,73 @@ export const useResetWeeklyTournament = () => {
     },
   })
 }
+
+export const useQuickTournaments = () =>
+  useQuery({ queryKey: ["quick-tournaments"], queryFn: quickTournamentApi.list })
+
+export const useQuickTournament = (id) =>
+  useQuery({ queryKey: ["quick-tournament", id], queryFn: () => quickTournamentApi.get(id), enabled: !!id })
+
+export const useCreateQuickTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name) => quickTournamentApi.create(name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-tournaments"] }),
+  })
+}
+
+export const useSetQuickTournamentPlayers = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, playerIds }) => quickTournamentApi.setPlayers(id, playerIds),
+    onSuccess: (_, { id }) => qc.invalidateQueries({ queryKey: ["quick-tournament", id] }),
+  })
+}
+
+export const useSaveQuickTournamentResult = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ matchId, player1Score, player2Score, tieWinnerId }) =>
+      quickTournamentApi.saveResult(matchId, player1Score, player2Score, tieWinnerId),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["quick-tournament"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+    },
+  })
+}
+
+export const useDeleteQuickTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id) => quickTournamentApi.deleteTournament(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-tournaments"] }),
+  })
+}
+
+export const useUpdateQuickMatchPlayers = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ matchId, ...body }) => quickTournamentApi.updateMatchPlayers(matchId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-tournament"] }),
+  })
+}
+
+export const useResetQuickTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id) => quickTournamentApi.reset(id),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["quick-tournaments"] })
+      qc.invalidateQueries({ queryKey: ["quick-tournament", String(id)] })
+    },
+  })
+}
+
+export const useQuickTournamentCurrent = () =>
+  useQuery({ queryKey: ["quick-tournament-current"], queryFn: quickTournamentApi.current })
+
+export const useQuickTournamentTopScorers = () =>
+  useQuery({ queryKey: ["quick-tournament-top-scorers"], queryFn: quickTournamentApi.topScorers })
 
 export const useUclUnassigned = () =>
   useQuery({ queryKey: ["ucl-unassigned"], queryFn: uclApi.unassigned })
@@ -329,7 +396,7 @@ export const useFixtureRecords = (fixtureId) =>
     queryKey: ["fixture-records", fixtureId],
     queryFn:  () => recordsApi.byFixture(fixtureId),
     enabled:  !!fixtureId,
-    refetchInterval: 30000, // poll every 30s so both teams see each other's updates
+    refetchInterval: 30000, // poll every 30s so both teams (and admins) see each other's updates
   })
 
 export const useEditTeamRecord = () => {
@@ -400,20 +467,6 @@ export const useGenerateSeasonFixtures = () => {
   })
 }
 
-export const useChangeLeagueFormat = () => {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: fixturesApi.changeFormat,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["league-format"] }),
-  })
-}
-
-export const useLeagueFormat = () =>
-  useQuery({ queryKey: ["league-format"], queryFn: () => fixturesApi.getFormat() })
-
-export const useLeagueFormatPublic = () =>
-  useQuery({ queryKey: ["league-format-public"], queryFn: () => fixturesApi.getFormatPublic() })
-
 export const useUpdateFixture = () => {
   const qc = useQueryClient()
   return useMutation({
@@ -443,17 +496,6 @@ export const useSaveFixtureResult = () => {
   return useMutation({
     mutationFn: ({ id, homeScore, awayScore, homeGoals, awayGoals }) =>
       fixturesApi.saveResult(id, homeScore, awayScore, homeGoals, awayGoals),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["fixtures"] })
-      qc.invalidateQueries({ queryKey: QK.teams })
-    },
-  })
-}
-
-export const useCloseFixture = () => {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id) => fixturesApi.close(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fixtures"] })
       qc.invalidateQueries({ queryKey: QK.teams })
@@ -670,93 +712,6 @@ export const useDeleteUclKnockout = () => {
   })
 }
 
-// ── Player Auction ──────────────────────────────────────────────────────
-// Polled every 1.5s for live updates — both admin and the public live view
-// use this same hook, so they always agree on what's actually happening.
-// The 1.5s poll here is now just a fallback safety net in case a client's
-// WebSocket connection silently drops — the actual real-time sync happens
-// via useAuctionSocket, which pushes updates instantly instead of waiting
-// on this interval.
-export const useAuctionCurrent = () =>
-  useQuery({ queryKey: ["auction-current"], queryFn: auctionApi.current, refetchInterval: 20000 })
-
-function useAuctionMutation(fn) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: fn,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["auction-current"] }),
-  })
-}
-
-export const useStartAuction    = () => useAuctionMutation((budgetPerTeam) => auctionApi.start(budgetPerTeam))
-export const useRetainPlayer    = () => useAuctionMutation(({ sessionId, teamId, playerId, price }) => auctionApi.retain(sessionId, teamId, playerId, price))
-export const useRemoveRetention = () => useAuctionMutation((id) => auctionApi.removeRetention(id))
-export const useAddToPool       = () => useAuctionMutation(({ sessionId, playerId }) => auctionApi.addToPool(sessionId, playerId))
-export const useRemoveFromPool  = () => useAuctionMutation((id) => auctionApi.removeFromPool(id))
-export const useBuildAuctionPool = () => useAuctionMutation((sessionId) => auctionApi.buildPool(sessionId))
-export const useNextAuctionPlayer = () => useAuctionMutation(({ sessionId, playerId }) => auctionApi.nextPlayer(sessionId, playerId))
-
-// Bidding needs to feel instant — clicking "+₹5" or "Set Bid" updates the
-// screen immediately (optimistic), before the server even responds, since
-// waiting for a full round-trip + refetch on every single bid is exactly
-// what "feels slow" compared to the original standalone app (which had no
-// network calls at all). Only reconciles/rolls back if the server actually
-// disagrees (e.g., someone else's bid landed first).
-// Deliberately a PLAIN mutation with zero side effects of its own — no
-// optimistic update, no onSuccess refetch. AuctionAdmin's bid queue owns
-// the instant-feedback responsibility entirely (one optimistic write per
-// click, immediately), and the WebSocket broadcast is what delivers the
-// authoritative confirmed state afterward. If this used the shared
-// useAuctionMutation helper, its built-in onSuccess refetch would fire
-// once per queued bid — exactly the redundant-network-traffic problem
-// already fixed once today, just reintroduced through the queue instead.
-export const usePlaceBid = () =>
-  useMutation({
-    mutationFn: ({ sessionId, teamId, amount }) => auctionApi.bid(sessionId, teamId, amount),
-  })
-
-// Quick-bid ("+₹5" button) — the amount itself is decided atomically on
-// the server (see routes/auction.js), immune to network-reordering races
-// that a client-computed target amount is vulnerable to. The optimistic
-// update here mirrors that same relative logic (just "+5 to whatever's
-// currently shown"), so it can never drift out of sync with the eventual
-// authoritative value the way computing an absolute target could.
-export const useQuickBid = () => {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ sessionId, teamId }) => auctionApi.quickBid(sessionId, teamId),
-    onMutate: async ({ teamId }) => {
-      await qc.cancelQueries({ queryKey: ["auction-current"] })
-      const previous = qc.getQueryData(["auction-current"])
-      if (previous?.session) {
-        const bidderTeam = previous.teams?.find(t => t.id === teamId)
-        qc.setQueryData(["auction-current"], {
-          ...previous,
-          session: {
-            ...previous.session,
-            currentBid: previous.session.currentBid + 5,
-            currentBidderTeamId: teamId,
-            currentBidderTeamName: bidderTeam?.name ?? previous.session.currentBidderTeamName,
-          },
-        })
-      }
-      return { previous }
-    },
-    onError: () => {},
-  })
-}
-
-export const useSellPlayer      = () => useAuctionMutation(({ sessionId, ...opts }) => auctionApi.sell(sessionId, opts))
-export const useMarkUnsold      = () => useAuctionMutation((sessionId) => auctionApi.markUnsold(sessionId))
-export const useAdvanceAuctionRound = () => useAuctionMutation((sessionId) => auctionApi.advanceRound(sessionId))
-export const useCompleteAuction = () => useAuctionMutation((sessionId) => auctionApi.complete(sessionId))
-export const useSetBidder    = () => useAuctionMutation(({ sessionId, teamId }) => auctionApi.setBidder(sessionId, teamId))
-export const useReduceBid    = () => useAuctionMutation((sessionId) => auctionApi.reduceBid(sessionId))
-export const useExtraTime    = () => useAuctionMutation((sessionId) => auctionApi.extraTime(sessionId))
-export const useUndoLastSale = () => useAuctionMutation((sessionId) => auctionApi.undoLastSale(sessionId))
-export const useDeleteAuctionSession = () => useAuctionMutation((sessionId) => auctionApi.deleteSession(sessionId))
-export const useEnterAuction = () => useAuctionMutation((sessionId) => auctionApi.enter(sessionId))
-export const useLeaveAuction = () => useAuctionMutation((sessionId) => auctionApi.leave(sessionId))
 // ── Player comparison & performance zones ────────────────────────────────
 export const usePlayerCompareStats    = (id) =>
   useQuery({ queryKey: ["player-compare-stats", String(id)], queryFn: () => playersApi.compareStats(id), enabled: !!id })

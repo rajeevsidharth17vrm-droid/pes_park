@@ -3,7 +3,6 @@ import { z } from "zod"
 import bcrypt from "bcryptjs"
 import { query } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
-import { claimAward, addBdr } from "../services/bdrAwards.js"
 import { generatePlayoffs } from "../services/playoffs.js"
 import { reconcileTrophyRoster, awardOrReassignTrophy } from "../services/trophyAwards.js"
 
@@ -591,18 +590,12 @@ router.patch("/:id/password", authenticate, adminOnly, async (req, res, next) =>
 // the system), same for the team owner's user account. Fixtures,
 // lineups, and trade requests involving this team cascade-delete
 // automatically too. What this explicitly cleans up first is everything
-// the database does NOT auto-handle for a team reference (auction bid
-// history, retentions, sales, live bidder state, and playoff records) —
-// without doing this first, the delete would fail outright.
+// the database does NOT auto-handle for a team reference (playoff
+// records) — without doing this first, the delete would fail outright.
 router.delete("/:id", authenticate, adminOnly, async (req, res, next) => {
   try {
     const teamId = req.params.id
 
-    await query("DELETE FROM auction_bid_log WHERE team_id = $1", [teamId])
-    await query("UPDATE auction_pool SET prev_team_id = NULL WHERE prev_team_id = $1", [teamId])
-    await query("DELETE FROM auction_retentions WHERE team_id = $1", [teamId])
-    await query("DELETE FROM auction_sales WHERE team_id = $1", [teamId])
-    await query("UPDATE auction_sessions SET current_bidder_team_id = NULL WHERE current_bidder_team_id = $1", [teamId])
     await query(
       "DELETE FROM team_league_playoffs WHERE team1_id = $1 OR team2_id = $1 OR winner_team_id = $1",
       [teamId]
@@ -622,7 +615,7 @@ router.delete("/:id", authenticate, adminOnly, async (req, res, next) => {
 // meant to persist as permanent history regardless of season resets.
 async function clearCurrentSeasonData(q) {
   await q(`UPDATE teams SET played = 0, won = 0, drawn = 0, lost = 0, gf = 0, ga = 0, score_points = 0`)
-  await q(`UPDATE players SET market_value = 0, form = '{}', bdr_points = 0`)
+  await q(`UPDATE players SET market_value = 0, form = '{}', bdr_points = 0, best_player_points = 0`)
   await q(`DELETE FROM fixtures`)
   await q(`DELETE FROM fixture_lineups`)
   await q(`DELETE FROM trade_requests`)
@@ -686,11 +679,14 @@ router.post("/season-delete", authenticate, adminOnly, async (req, res, next) =>
 })
 
 // ============================================================================
-// Team League Playoffs — IPL-style: Qualifier 1 (1st v 2nd), Eliminator
-// (3rd v 4th), Qualifier 2 (Q1 loser v Eliminator winner), Final (Q1
-// winner v Q2 winner). Champion/Runner-up/3rd/4th are derived from this
-// bracket, not raw group-stage standings, and that's what the BDR season
-// awards now use.
+// Team League Playoffs — top-5 IPL-style bracket:
+//   Qualifier 1 (1st v 2nd) — winner goes straight to the Final.
+//   Eliminator (4th v 5th) — loser is eliminated (5th place).
+//   Knockout Round (3rd v Eliminator winner) — loser is eliminated (4th place).
+//   Qualifier 2 (Q1 loser v Knockout Round winner) — winner reaches the Final.
+//   Final (Q1 winner v Q2 winner).
+// Champion/Runner-up/3rd/4th/5th are derived from this bracket, not raw
+// group-stage standings, and that's what the BDR season awards now use.
 // ============================================================================
 
 const PLAYOFF_SELECT = `
@@ -719,12 +715,13 @@ router.get("/playoffs/current", async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// POST /api/teams/playoffs/generate — create Qualifier 1 + Eliminator from
-// the current top 4 group-stage standings. Requires every group-stage
-// fixture to be completed first, and only ever generates once per season.
-// This same logic also fires automatically the instant the last group-
-// stage fixture is closed (see routes/fixtures.js) — this manual endpoint
-// exists as a fallback/retry in case that ever needs re-running.
+// POST /api/teams/playoffs/generate — create Qualifier 1, Eliminator, and
+// the Knockout Round's known slot from the current top 5 group-stage
+// standings. Requires every group-stage fixture to be completed first, and
+// only ever generates once per season. This same logic also fires
+// automatically the instant the last group-stage fixture is closed (see
+// routes/fixtures.js) — this manual endpoint exists as a fallback/retry in
+// case that ever needs re-running.
 router.post("/playoffs/generate", authenticate, adminOnly, async (req, res, next) => {
   try {
     const remainingRes = await query(`SELECT COUNT(*) FROM fixtures WHERE status != 'completed'`)
@@ -735,7 +732,7 @@ router.post("/playoffs/generate", authenticate, adminOnly, async (req, res, next
     const season = await getCurrentSeason()
     const generated = await generatePlayoffs(season)
     if (!generated) {
-      return res.status(400).json({ error: "Playoffs already generated for this season, or fewer than 4 teams exist." })
+      return res.status(400).json({ error: "Playoffs already generated for this season, or fewer than 5 teams exist." })
     }
 
     const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
@@ -769,49 +766,23 @@ router.patch("/playoffs/:id/result", authenticate, adminOnly, async (req, res, n
     )
 
     if (match.match_type === "qualifier1") {
-      // Winner → Final (team1 slot), loser → Qualifier 2 (team1 slot)
+      // Winner → Final (team1 slot), loser → Qualifier 2 (team1 slot, waits for Knockout Round winner)
       await query("UPDATE team_league_playoffs SET team1_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
       await query("UPDATE team_league_playoffs SET team1_id=$1 WHERE season_number=$2 AND match_type='qualifier2'", [loserId, match.season_number])
     } else if (match.match_type === "eliminator") {
+      // Winner → Knockout Round (team2 slot, vs 3rd place), loser eliminated (5th place)
+      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='knockout'", [winnerId, match.season_number])
+    } else if (match.match_type === "knockout") {
       // Winner → Qualifier 2 (team2 slot), loser eliminated (4th place)
       await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='qualifier2'", [winnerId, match.season_number])
     } else if (match.match_type === "qualifier2") {
       // Winner → Final (team2 slot), loser eliminated (3rd place)
       await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
     } else if (match.match_type === "final") {
-      // Champion decided — award season BDR based on the PLAYOFF result,
-      // not raw group-stage standings. Only ever fires once per season.
-      if (await claimAward("team_league_season", match.season_number)) {
-        const eliminatorRes = await query(
-          "SELECT winner_team_id, team1_id, team2_id FROM team_league_playoffs WHERE season_number=$1 AND match_type='eliminator'",
-          [match.season_number]
-        )
-        const elim = eliminatorRes.rows[0]
-        const fourthPlaceId = elim.winner_team_id === elim.team1_id ? elim.team2_id : elim.team1_id
-
-        const qualifier2Res = await query(
-          "SELECT winner_team_id, team1_id, team2_id FROM team_league_playoffs WHERE season_number=$1 AND match_type='qualifier2'",
-          [match.season_number]
-        )
-        const q2 = qualifier2Res.rows[0]
-        const thirdPlaceId = q2.winner_team_id === q2.team1_id ? q2.team2_id : q2.team1_id
-
-        const placements = [
-          { teamId: winnerId, bdr: 12 },   // Champion
-          { teamId: loserId, bdr: 9 },     // Runner-up
-          { teamId: thirdPlaceId, bdr: 7 },
-          { teamId: fourthPlaceId, bdr: 5 },
-        ]
-        for (const { teamId, bdr } of placements) {
-          const playersRes = await query("SELECT id FROM players WHERE team_id = $1", [teamId])
-          for (const p of playersRes.rows) await addBdr(p.id, bdr)
-        }
-      }
-
-      // Trophy awards — re-checked EVERY time the Final's result is saved
-      // (not gated by claimAward above), so correcting a wrong Final result
-      // later automatically reverts the wrong team's roster and reassigns
-      // the trophy to the actual correct champion's current roster.
+      // Trophy awards — re-checked EVERY time the Final's result is saved,
+      // so correcting a wrong Final result later automatically reverts the
+      // wrong team's roster and reassigns the trophy to the actual correct
+      // champion's current roster.
       const rosterRes = await query("SELECT id FROM players WHERE team_id = $1", [winnerId])
       await reconcileTrophyRoster({
         sourceKey: `team_league_champion_season_${match.season_number}`,
