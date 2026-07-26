@@ -56,7 +56,7 @@ export default function UclStandings({ onPlayerClick }) {
     return (
       <div className="card px-6 py-14 text-center">
         <Trophy className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-400 font-medium">UCL groups not set up yet</p>
+        <p className="text-slate-400 font-medium">Solo Tour groups not set up yet</p>
         <p className="text-sm text-slate-600 mt-1">Check back once the admin creates the group stage</p>
       </div>
     )
@@ -76,7 +76,7 @@ export default function UclStandings({ onPlayerClick }) {
         <div className="flex items-center gap-3">
           <img src={headerIcon} alt="Solo Tour" className="w-9 h-9 object-contain flex-shrink-0" />
           <div>
-            <p className="section-label mb-0.5">UCL</p>
+            <p className="section-label mb-0.5">Solo Tour</p>
             <h2 className="text-base font-semibold text-white">{headerTitle}</h2>
           </div>
         </div>
@@ -302,7 +302,7 @@ export default function UclStandings({ onPlayerClick }) {
         scorers.length === 0 ? (
           <div className="px-5 py-10 text-center">
             <Target className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No UCL goals logged yet</p>
+            <p className="text-sm text-slate-500">No Solo Tour goals logged yet</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
