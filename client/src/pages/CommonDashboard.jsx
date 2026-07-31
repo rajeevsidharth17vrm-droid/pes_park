@@ -144,7 +144,7 @@ function TeamRosterChips({ players, bestPerformerId, delay = 3000 }) {
 }
 
 const PANEL_OPTIONS = [
-  { value: "standings",  label: "Points Table"    },
+  { value: "standings",  label: "Auction Tour"    },
   { value: "ucl",        label: "Solo Tour"             },
   { value: "weekly",     label: "Weekend Series"          },
   { value: "quick",      label: "Quick Tournament" },
@@ -681,19 +681,21 @@ export default function CommonDashboard() {
                 <StatCard label="Players"     value={players.length}                               sub="registered"      icon={Activity}   accent="bg-blue-400/15 text-blue-400"    />
               </div>
 
-              {/* Panel */}
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Dashboard view</p>
-                <select
-                  value={activePanel}
-                  onChange={e => setActivePanel(e.target.value)}
-                  className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
-                >
-                  {PANEL_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Panel — only shown on the 4 main competition views */}
+              {["standings", "ucl", "weekly", "quick"].includes(activePanel) && (
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Dashboard view</p>
+                  <select
+                    value={activePanel}
+                    onChange={e => setActivePanel(e.target.value)}
+                    className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+                  >
+                    {PANEL_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div key={activePanel} className="animate-panel-in">
                 {activePanel === "players"   && <PlayersDirectory players={players} onPlayerClick={handlePlayer} />}
