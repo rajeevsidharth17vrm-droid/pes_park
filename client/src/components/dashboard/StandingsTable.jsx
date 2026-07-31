@@ -1,12 +1,13 @@
 import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { Target, Trophy } from "lucide-react"
+import { Target, Trophy, Crown, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { useTopScorers, useTeamLeaguePlayoffs, useFixtures } from "../../lib/queries"
 import { TeamAvatar, TeamLogoIcon } from "../common/TeamLogo"
 import PlayerAvatarIcon from "../common/PlayerAvatarIcon"
 import RankBadge from "../common/RankBadge"
 import { useRankChanges } from "../../hooks/useRankChanges"
+import { getAvatarById } from "../../lib/avatars"
 import teamLeagueTrophy from "../../../images/Team League.png"
 import goldenBoot from "../../../images/Golden Boot.png"
 
@@ -57,6 +58,17 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
   const setView = onViewChange || setInternalView
   const { data: scorers = [] } = useTopScorers()
   const scorerRankChanges = useRankChanges("league-golden-boot", scorers.map(s => s.id))
+
+  // Best Player — pre-compute here so the hook is always called unconditionally
+  const bpPlayers = players.map(p => ({
+    ...p,
+    bpAvg: p.bestPlayerMatches > 0 ? p.bestPlayerPoints / p.bestPlayerMatches : 0
+  }))
+  const bpSorted = [...bpPlayers].sort((a, b) =>
+    (b.bpAvg - a.bpAvg) || (b.bestPlayerMatches - a.bestPlayerMatches) || a.name.localeCompare(b.name)
+  )
+  const bpMax = bpSorted[0]?.bpAvg || 1
+  const bpRankChanges = useRankChanges("best-player-ranking", bpSorted.map(p => p.id))
   const { data: playoffsData } = useTeamLeaguePlayoffs()
   const { data: fixtures = [] } = useFixtures()
   const [activeFixtureRound, setActiveFixtureRound] = useState(1)
@@ -82,15 +94,21 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
       {/* Header with dropdown */}
       <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <img
-            src={view === "scorers" ? goldenBoot : teamLeagueTrophy}
-            alt={view === "scorers" ? "Golden Boot" : "Auction Tour"}
-            className="w-9 h-9 object-contain flex-shrink-0"
-          />
+          {view === "bestplayer" ? (
+            <div className="w-9 h-9 rounded-lg bg-emerald-400/15 flex items-center justify-center flex-shrink-0">
+              <Star className="w-5 h-5 text-emerald-400" />
+            </div>
+          ) : (
+            <img
+              src={view === "scorers" ? goldenBoot : teamLeagueTrophy}
+              alt={view === "scorers" ? "Golden Boot" : "Points Table"}
+              className="w-9 h-9 object-contain flex-shrink-0"
+            />
+          )}
           <div>
-            <p className="section-label mb-0.5">Auction Tour</p>
+            <p className="section-label mb-0.5">Points Table</p>
             <h2 className="text-base font-semibold text-white">
-              {view === "table" ? "Season standings" : view === "fixtures" ? "Fixtures" : view === "playoffs" ? "Playoffs" : "Golden Boot"}
+              {view === "table" ? "Season standings" : view === "fixtures" ? "Fixtures" : view === "playoffs" ? "Playoffs" : view === "bestplayer" ? "Best Player" : "Golden Boot"}
             </h2>
           </div>
         </div>
@@ -99,10 +117,11 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
           onChange={e => setView(e.target.value)}
           className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
         >
-          <option value="table">Auction Tour</option>
+          <option value="table">Points Table</option>
           <option value="fixtures">Fixtures</option>
           <option value="playoffs">Playoffs</option>
           <option value="scorers">Golden Boot</option>
+          <option value="bestplayer">Best Player</option>
         </select>
       </div>
 
@@ -305,6 +324,75 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
         <div className="px-5 py-3 border-t border-surface-border/60 flex items-center gap-4 text-xs text-slate-500">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400/60" /> Top 5 qualify for Playoffs</span>
         </div>
+      )}
+
+      {/* Best Player View */}
+      {view === "bestplayer" && (
+        bpSorted.length === 0 ? (
+          <div className="px-5 py-10 text-center">
+            <Star className="w-6 h-6 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm text-slate-500">No best player data yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-surface-border">
+            {bpSorted.map((player, idx) => {
+              const isFirst = idx === 0
+              const barPct  = (player.bpAvg / bpMax) * 100
+              const preset  = getAvatarById(player.avatarId)
+              const avatarSrc = player.avatarUrl || preset?.thumb
+              return (
+                <div
+                  key={player.id}
+                  onClick={() => onPlayerClick?.(player)}
+                  className={cn(
+                    "px-5 py-3.5 flex items-center gap-4 transition-colors cursor-pointer",
+                    isFirst ? "bg-emerald-400/5 hover:bg-emerald-400/8" : "hover:bg-surface-hover"
+                  )}
+                >
+                  {/* Rank */}
+                  <div className="w-6 flex-shrink-0 text-center">
+                    {isFirst
+                      ? <Crown className="w-4 h-4 text-emerald-400 mx-auto" />
+                      : <span className="flex items-center gap-0.5"><span className="text-sm font-medium text-slate-500">#{idx + 1}</span><RankBadge change={bpRankChanges[player.id]} /></span>
+                    }
+                  </div>
+                  {/* Avatar */}
+                  {avatarSrc ? (
+                    <img src={avatarSrc} alt={player.name} className="w-[43px] h-[43px] rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className={cn(
+                      "w-[43px] h-[43px] rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0",
+                      isFirst ? "bg-emerald-400/20 text-emerald-400" : "bg-surface-border text-slate-400"
+                    )}>
+                      {player.name.split(" ").map(n => n[0]).join("")}
+                    </div>
+                  )}
+                  {/* Name + bar */}
+                  <div className="flex-1 min-w-0">
+                    <span className={cn("font-semibold text-sm truncate block mb-0.5", isFirst ? "text-white" : "text-slate-300")}>
+                      {player.name}
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex-1 h-1 bg-surface-border rounded-full overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full transition-all", isFirst ? "bg-emerald-400" : "bg-accent/60")}
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Points */}
+                  <div className="text-right flex-shrink-0">
+                    <span className={cn("font-bold text-sm font-mono", isFirst ? "text-emerald-400" : "text-white")}>
+                      {player.bpAvg.toFixed(2)}
+                    </span>
+                    <p className="text-xs text-slate-600 mt-0.5">{player.bestPlayerMatches || 0} matches</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
       )}
 
       {/* Top 10 Goal Scorers View */}

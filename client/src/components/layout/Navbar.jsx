@@ -34,7 +34,7 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group min-w-0 flex-shrink-0 ml-11 sm:ml-12">
-          <img src="/logo.png" alt="TEC Logo" className="w-9 h-9 sm:w-14 sm:h-14 rounded-lg object-cover flex-shrink-0" />
+          <img src="/logo.png" alt="Pes Park Logo" className="w-9 h-9 sm:w-14 sm:h-14 rounded-lg object-cover flex-shrink-0" />
           <div className="flex flex-col leading-none min-w-0">
             <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">Pes Park</span>
             <span className="text-[10px] sm:text-xs text-accent font-semibold tracking-widest uppercase truncate">Efootball Community</span>

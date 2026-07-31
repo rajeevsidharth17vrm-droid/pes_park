@@ -144,7 +144,7 @@ function TeamRosterChips({ players, bestPerformerId, delay = 3000 }) {
 }
 
 const PANEL_OPTIONS = [
-  { value: "standings",  label: "Auction Tour"    },
+  { value: "standings",  label: "Points Table"    },
   { value: "ucl",        label: "Solo Tour"             },
   { value: "weekly",     label: "Weekend Series"          },
   { value: "quick",      label: "Quick Tournament" },

@@ -488,7 +488,7 @@ function FixtureExportCard({ round, fixtures, exportRef, visible }) {
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, position: "relative" }}>
-        <img src={logoUrl} alt="TEC" style={{ width: 44, height: 44, objectFit: "contain" }} />
+        <img src={logoUrl} alt="Pes Park" style={{ width: 44, height: 44, objectFit: "contain" }} />
         <div>
           <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>Pes Park · Auction Tour</p>
           <p style={{ color: "#ffffff", fontSize: 22, fontWeight: 800, margin: 0 }}>Round {round} Fixtures</p>

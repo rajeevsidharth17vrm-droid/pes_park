@@ -199,7 +199,7 @@ function RoundExportCard({ round, byGroup, exportRef, visible }) {
       />
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, position: "relative" }}>
-        <img src={logoUrl} alt="TEC" style={{ width: 44, height: 44, objectFit: "contain" }} />
+        <img src={logoUrl} alt="Pes Park" style={{ width: 44, height: 44, objectFit: "contain" }} />
         <div>
           <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>Pes Park · Solo Tour Group Stage</p>
           <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Round {round} Fixtures</p>
@@ -279,7 +279,7 @@ export default function UclResults() {
         height: el.scrollHeight,
       })
       const link = document.createElement("a")
-      link.download = `UCL-Round-${activeRound}-Fixtures.png`
+      link.download = `Solo-Tour-Round-${activeRound}-Fixtures.png`
       link.href = dataUrl
       link.click()
     } catch (err) {
@@ -296,7 +296,7 @@ export default function UclResults() {
     return (
       <div className="card px-6 py-12 text-center">
         <Trophy className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-400 font-medium">No UCL fixtures generated yet</p>
+        <p className="text-slate-400 font-medium">No Solo Tour fixtures generated yet</p>
         <p className="text-sm text-slate-600 mt-1">Complete the group draw first — fixtures are auto-generated on Done</p>
       </div>
     )

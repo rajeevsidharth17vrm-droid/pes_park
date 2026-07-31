@@ -1,13 +1,12 @@
 import { useNavigate } from "react-router-dom"
-import { X, Users, GitCompare, Shield, Trophy, TrendingUp, Award, Star } from "lucide-react"
+import { X, Users, GitCompare, Shield, Trophy, TrendingUp, Award, Home } from "lucide-react"
 import { cn } from "../../lib/utils"
 
-const MENU_ITEMS = [
+const MORE_ITEMS = [
   { value: "players",    label: "Total Players",   icon: Users       },
   { value: "compare",    label: "Compare Players", icon: GitCompare  },
   { value: "teams",      label: "Teams",           icon: Shield      },
   { value: "bdr",        label: "BDR Rankings",    icon: Trophy      },
-  { value: "bestplayer", label: "Best Player",     icon: Star        },
   { value: "market",     label: "Market Value",    icon: TrendingUp  },
   { value: "trophies",   label: "Trophies",        icon: Award       },
 ]
@@ -20,9 +19,14 @@ export default function MobileMenu({ open, onClose }) {
     onClose()
   }
 
+  const goHome = () => {
+    navigate("/")
+    onClose()
+  }
+
   return (
     <>
-      {/* Dimmed backdrop — covers the rest of the page, click to close */}
+      {/* Dimmed backdrop */}
       <div
         onClick={onClose}
         className={cn(
@@ -31,7 +35,7 @@ export default function MobileMenu({ open, onClose }) {
         )}
       />
 
-      {/* Left-side drawer — partial width, slides in from the left */}
+      {/* Left-side drawer */}
       <div
         className={cn(
           "fixed top-0 left-0 bottom-0 z-[61] w-72 sm:w-80 max-w-[80vw]",
@@ -52,17 +56,33 @@ export default function MobileMenu({ open, onClose }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
-          {MENU_ITEMS.map(({ value, label, icon: Icon }) => (
+
+          {/* Home */}
+          <button
+            onClick={goHome}
+            className="flex items-center gap-3 px-3 py-3 rounded-xl text-left text-white hover:bg-surface transition-colors"
+          >
+            <Home className="w-5 h-5 text-accent flex-shrink-0" />
+            <span className="text-sm font-semibold">Home</span>
+          </button>
+
+          <div className="my-2 border-t border-surface-border" />
+
+          <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            More
+          </p>
+
+          {MORE_ITEMS.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               onClick={() => goTo(value)}
-              className="flex items-center gap-3 px-3 py-3 rounded-xl text-left text-white
-                         hover:bg-surface transition-colors"
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-left text-white hover:bg-surface transition-colors"
             >
               <Icon className="w-5 h-5 text-accent flex-shrink-0" />
               <span className="text-sm font-medium">{label}</span>
             </button>
           ))}
+
         </nav>
       </div>
     </>

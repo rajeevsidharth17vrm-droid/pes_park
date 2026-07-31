@@ -123,7 +123,7 @@ function SeasonResetCard() {
     return (
       <div className="card p-6 border-emerald-500/30 bg-emerald-500/5 text-center">
         <p className="text-emerald-400 font-semibold text-lg mb-1">✅ New season started!</p>
-        <p className="text-sm text-slate-400">Team stats, fixtures, trades, and the UCL competition were cleared. Player records and trophies are untouched.</p>
+        <p className="text-sm text-slate-400">Team stats, fixtures, trades, and the Solo Tour competition were cleared. Player records and trophies are untouched.</p>
         <button onClick={() => setDone(false)} className="mt-3 text-xs text-slate-500 hover:text-white transition-colors">Dismiss</button>
       </div>
     )
@@ -138,7 +138,7 @@ function SeasonResetCard() {
             <p className="text-rose-400 font-semibold mb-1">Start a new season?</p>
             <p className="text-sm text-slate-400">
               This will reset every team's played/won/drawn/lost/points to 0, reset all player market values and recent form,
-              and permanently <strong>delete every fixture, lineup, pending trade, and the entire UCL competition</strong>
+              and permanently <strong>delete every fixture, lineup, pending trade, and the entire Solo Tour competition</strong>
               (groups, fixtures, and knockout bracket). The season number will advance by one. Player records, trophies,
               and match history stay intact.
             </p>
@@ -165,7 +165,7 @@ function SeasonResetCard() {
         <Trophy className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-white font-semibold">Start New Season</p>
-          <p className="text-sm text-slate-500 mt-0.5">Archive the current season: reset team stats, clear fixtures/trades/UCL, and advance the season number.</p>
+          <p className="text-sm text-slate-500 mt-0.5">Archive the current season: reset team stats, clear fixtures/trades/Solo Tour, and advance the season number.</p>
         </div>
       </div>
       <button onClick={() => setConfirm(true)}
@@ -216,7 +216,7 @@ function DeleteSeasonCard() {
           <div>
             <p className="text-rose-400 font-semibold mb-1">Delete the current season?</p>
             <p className="text-sm text-slate-400">
-              This clears the current season's team stats, fixtures, trades, and UCL competition, then moves the season
+              This clears the current season's team stats, fixtures, trades, and Solo Tour competition, then moves the season
               number back by one. <strong>This does not restore the previous season's actual data</strong> — that was
               already permanently deleted the moment this season started. The previous season will begin fresh, not
               as it was before. Player records and trophies are unaffected either way.
