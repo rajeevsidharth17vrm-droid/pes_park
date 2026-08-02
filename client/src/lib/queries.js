@@ -39,7 +39,10 @@ export const useSetWeeklyPlayers = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, playerIds }) => weeklyApi.setPlayers(id, playerIds),
-    onSuccess: (_, { id }) => qc.invalidateQueries({ queryKey: ["weekly-tournament", id] }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ["weekly-tournaments"] })       // refresh the list so status flips to "draw"
+      qc.invalidateQueries({ queryKey: ["weekly-tournament", id] })    // refresh the detail too
+    },
   })
 }
 
