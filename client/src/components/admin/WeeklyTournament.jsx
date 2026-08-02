@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Plus, Trophy, Trash2, ChevronRight, Calendar, CheckCircle, Clock } from "lucide-react"
+import { Plus, Trophy, Trash2, ChevronRight, Settings } from "lucide-react"
 import { useWeeklyTournaments, useCreateWeeklyTournament, useSetWeeklyPlayers, useDeleteWeeklyTournament } from "../../lib/queries"
 import { usePlayers } from "../../lib/queries"
 import { cn } from "../../lib/utils"
@@ -10,6 +10,81 @@ const STATUS_CONFIG = {
   draw:      { label: "Draw Ready", color: "text-amber-400",   bg: "bg-amber-400/15 border border-amber-400/30" },
   active:    { label: "Active",     color: "text-emerald-400", bg: "bg-emerald-400/15 border border-emerald-400/30" },
   completed: { label: "Completed",  color: "text-accent",      bg: "bg-accent/15 border border-accent/30" },
+}
+
+// ── Inline player picker for an EXISTING setup tournament ──────────────────
+function SetupDrawForm({ tournament, onClose }) {
+  const { data: players = [] } = usePlayers()
+  const setPlayers = useSetWeeklyPlayers()
+  const [selected, setSelected] = useState([])
+  const [search, setSearch]     = useState("")
+
+  const filtered = players.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) && !selected.includes(p.id)
+  )
+
+  function toggle(id) {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function handleDraw() {
+    if (selected.length < 2) return
+    await setPlayers.mutateAsync({ id: tournament.id, playerIds: selected })
+    onClose()
+  }
+
+  return (
+    <div className="card p-5 space-y-4 mb-3 border border-amber-400/20">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">Setup Draw — <span className="text-amber-400">{tournament.name}</span></p>
+        <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-300">✕ Cancel</button>
+      </div>
+      <p className="text-xs text-slate-500">{selected.length} players selected — min 2 required</p>
+
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map(id => {
+            const p = players.find(pl => pl.id === id)
+            return (
+              <button key={id} onClick={() => toggle(id)}
+                className="flex items-center gap-1 px-2 py-1 bg-accent/15 border border-accent/25 rounded-lg text-xs text-accent">
+                {p?.name} ✕
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <input
+        value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="Search players…"
+        className="w-full bg-pitch-800 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40"
+      />
+
+      <div className="max-h-48 overflow-y-auto space-y-1">
+        {filtered.map(p => (
+          <div key={p.id} onClick={() => toggle(p.id)}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-pitch-800 cursor-pointer transition-colors">
+            <div className="w-4 h-4 rounded border border-surface-border flex items-center justify-center flex-shrink-0">
+              {selected.includes(p.id) && <div className="w-2 h-2 rounded-sm bg-accent" />}
+            </div>
+            <span className="text-sm text-white">{p.name}</span>
+            <span className="text-xs text-slate-500 ml-auto">{p.team ?? "Free"}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-3">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-surface-border text-slate-400 text-sm">Cancel</button>
+        <button
+          onClick={handleDraw}
+          disabled={selected.length < 2 || setPlayers.isPending}
+          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-40">
+          {setPlayers.isPending ? "Generating…" : "Create Draw →"}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function CreateForm({ onClose }) {
@@ -122,6 +197,7 @@ export default function WeeklyAdmin() {
   const deleteTournament = useDeleteWeeklyTournament()
   const [showCreate, setShowCreate] = useState(false)
   const [confirmDel, setConfirmDel] = useState(null)
+  const [setupDrawId, setSetupDrawId] = useState(null)
 
   return (
     <div className="space-y-4">
@@ -153,48 +229,59 @@ export default function WeeklyAdmin() {
           {tournaments.map(t => {
             const cfg = STATUS_CONFIG[t.status] || STATUS_CONFIG.setup
             return (
-              <div key={t.id} className="card flex items-center gap-4 px-5 py-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{t.name}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-lg", cfg.bg, cfg.color)}>
-                      {cfg.label}
-                    </span>
-                    {t.player_count && (
-                      <span className="text-xs text-slate-500">{t.player_count} players</span>
-                    )}
-                    <span className="text-xs text-slate-600">
-                      {new Date(t.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}
-                    </span>
+              <div key={t.id}>
+                {setupDrawId === t.id && (
+                  <SetupDrawForm tournament={t} onClose={() => setSetupDrawId(null)} />
+                )}
+                <div className="card flex items-center gap-4 px-5 py-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{t.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-lg", cfg.bg, cfg.color)}>
+                        {cfg.label}
+                      </span>
+                      {t.player_count && (
+                        <span className="text-xs text-slate-500">{t.player_count} players</span>
+                      )}
+                      <span className="text-xs text-slate-600">
+                        {new Date(t.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {confirmDel === t.id ? (
-                    <>
-                      <button onClick={() => setConfirmDel(null)} className="text-xs px-3 py-1.5 rounded-lg border border-surface-border text-slate-400">Cancel</button>
-                      <button onClick={() => { deleteTournament.mutate(t.id); setConfirmDel(null) }}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-rose-500 text-white font-semibold">Delete</button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => setConfirmDel(t.id)}
-                        className="w-7 h-7 rounded-lg hover:bg-rose-400/10 flex items-center justify-center text-slate-500 hover:text-rose-400">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                  {t.status === "draw" && (
-                        <button onClick={() => navigate(`/weekly/draw/${t.id}`)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/15 text-amber-400 border border-amber-400/30 text-xs font-semibold">
-                          View Draw <ChevronRight className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-2">
+                    {confirmDel === t.id ? (
+                      <>
+                        <button onClick={() => setConfirmDel(null)} className="text-xs px-3 py-1.5 rounded-lg border border-surface-border text-slate-400">Cancel</button>
+                        <button onClick={() => { deleteTournament.mutate(t.id); setConfirmDel(null) }}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-rose-500 text-white font-semibold">Delete</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => setConfirmDel(t.id)}
+                          className="w-7 h-7 rounded-lg hover:bg-rose-400/10 flex items-center justify-center text-slate-500 hover:text-rose-400">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                      {(t.status === "active" || t.status === "completed") && (
-                        <button onClick={() => navigate(`/weekly/bracket/${t.id}`)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/15 text-accent border border-accent/25 text-xs font-semibold">
-                          View Bracket <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </>
-                  )}
+                        {t.status === "setup" && (
+                          <button onClick={() => setSetupDrawId(setupDrawId === t.id ? null : t.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 border border-surface-border text-xs font-semibold hover:bg-slate-600 transition-colors">
+                            <Settings className="w-3.5 h-3.5" /> Setup Draw
+                          </button>
+                        )}
+                        {t.status === "draw" && (
+                          <button onClick={() => navigate(`/weekly/draw/${t.id}`)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/15 text-amber-400 border border-amber-400/30 text-xs font-semibold">
+                            View Draw <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {(t.status === "active" || t.status === "completed") && (
+                          <button onClick={() => navigate(`/weekly/bracket/${t.id}`)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/15 text-accent border border-accent/25 text-xs font-semibold">
+                            View Bracket <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             )
