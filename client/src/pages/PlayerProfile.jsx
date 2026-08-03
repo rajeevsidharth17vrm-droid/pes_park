@@ -8,6 +8,7 @@ import { usePlayer, usePlayerPerformanceZones } from "../lib/queries"
 import { useTeamColor, readableTeamColor } from "../lib/teamColor"
 import { getAvatarById } from "../lib/avatars"
 import { cn } from "../lib/utils"
+import { useCachedImage } from "../hooks/useCachedImage"
 import ballondorTrophy    from "../../images/ballondor.png"
 import teamLeagueTrophy   from "../../images/Team League.png"
 import weeklyTrophy       from "../../images/Weekly.png"
@@ -31,6 +32,8 @@ const FormDot = ({ result }) => {
 
 
 function PlayerSquadCard({ player }) {
+  const cachedImage = useCachedImage(player.imageUrl)
+
   return (
     <div className="card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-4 border-b border-surface-border">
@@ -40,11 +43,15 @@ function PlayerSquadCard({ player }) {
 
       <div className="p-5">
         {player.imageUrl ? (
-          <img
-            src={player.imageUrl}
-            alt={player.name}
-            className="w-full aspect-[20/9] object-cover rounded-xl border border-surface-border"
-          />
+          cachedImage ? (
+            <img
+              src={cachedImage}
+              alt={player.name}
+              className="w-full aspect-[20/9] object-cover rounded-xl border border-surface-border"
+            />
+          ) : (
+            <div className="w-full aspect-[20/9] rounded-xl border border-surface-border bg-pitch-800 animate-pulse" />
+          )
         ) : (
           <div className={cn(
             "w-full aspect-[20/9] rounded-xl border-2 border-dashed border-surface-border flex flex-col items-center justify-center gap-2",
@@ -74,30 +81,34 @@ function PlayerSquadCard({ player }) {
 import HeadToHead from "../components/player/HeadToHead"
 import SeasonSummary from "../components/player/SeasonSummary"
 import PerformanceZones from "../components/dashboard/PerformanceZones"
+import PercentileDashboard from "../components/player/PercentileDashboard"
 
 function TrophyCase({ player }) {
   const trophies = [
     { image: ballondorTrophy,    label: "Ballon d'Or",             count: player.trophy1Count ?? 0 },
-    { image: teamLeagueTrophy,   label: "Auction Tour",             count: player.trophy2Count ?? 0 },
-    { image: uclTrophy,          label: "Solo Tour",                     count: player.trophy4Count ?? 0 },
-    { image: weeklyTrophy,       label: "Weekend Series",                  count: player.trophy3Count ?? 0 },
+    { image: teamLeagueTrophy,   label: "Team League",             count: player.trophy2Count ?? 0 },
+    { image: uclTrophy,          label: "UCL",                     count: player.trophy4Count ?? 0 },
+    { image: weeklyTrophy,       label: "Weekly",                  count: player.trophy3Count ?? 0 },
     { image: goldenBootTrophy,   label: "Weekly Golden Boot",      count: player.trophy5Count ?? 0 },
-    { image: teamLeagueGBTrophy, label: "Auction Tour Golden Boot", count: player.trophy6Count ?? 0 },
+    { image: teamLeagueGBTrophy, label: "League Golden Boot",      count: player.trophy6Count ?? 0 },
     { image: uclGBTrophy,        label: "UCL Golden Boot",         count: player.trophy7Count ?? 0 },
   ]
-
+  const total = trophies.reduce((a, t) => a + t.count, 0)
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-4 border-b border-surface-border">
-        <Trophy className="w-4 h-4 text-gold" />
-        <h2 className="text-base font-semibold text-white">Trophies</h2>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-gold" />
+          <h2 className="text-base font-semibold text-white">Trophies</h2>
+        </div>
+        {total > 0 && <span className="text-xs font-bold text-gold bg-gold/10 border border-gold/25 px-2.5 py-1 rounded-full">{total} total</span>}
       </div>
       <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
         {trophies.map((t, i) => (
-          <div key={i} className="flex items-center gap-3 bg-pitch-800 rounded-xl p-4 border border-surface-border">
+          <div key={i} className={cn("flex items-center gap-3 rounded-xl p-4 border transition-all", t.count > 0 ? "bg-pitch-800 border-surface-border" : "bg-pitch-900/30 border-surface-border/30 opacity-40")}>
             <img src={t.image} alt={t.label} className="w-10 h-10 object-contain flex-shrink-0" />
             <div>
-              <p className="text-2xl font-extrabold font-mono text-white">{t.count}</p>
+              <p className={cn("text-2xl font-extrabold font-mono", t.count > 0 ? "text-white" : "text-slate-600")}>{t.count}</p>
               <p className="text-xs text-slate-500">{t.label}</p>
             </div>
           </div>
@@ -106,6 +117,7 @@ function TrophyCase({ player }) {
     </div>
   )
 }
+
 export default function PlayerProfile() {
   const { id }   = useParams()
   const navigate = useNavigate()
@@ -115,8 +127,14 @@ export default function PlayerProfile() {
   const teamColor = useTeamColor(player?.teamLogo)
   const teamTextColor = readableTeamColor(teamColor)
   const presetAvatar = getAvatarById(player?.avatarId)
-  const avatarThumb  = player?.avatarUrl    || presetAvatar?.thumb || null
-  const avatarBg     = player?.avatarBgUrl  || presetAvatar?.bg    || null
+
+  // Cache Supabase URLs locally — preset (bundled) images are non-https so
+  // useCachedImage returns them as-is immediately with no async work.
+  const rawAvatarThumb = player?.avatarUrl   || presetAvatar?.thumb || null
+  const rawAvatarBg    = player?.avatarBgUrl || presetAvatar?.bg    || null
+  const avatarThumb    = useCachedImage(rawAvatarThumb)
+  const avatarBg       = useCachedImage(rawAvatarBg)
+
   const [pickerOpen, setPickerOpen] = useState(false)
 
   if (isLoading) return <Layout><Loading /></Layout>
@@ -243,7 +261,7 @@ export default function PlayerProfile() {
             ))}
           </div>
 
-{showAuctionDelta && !player.isCaptain && (
+          {showAuctionDelta && !player.isCaptain && (
             <div className="flex items-center gap-3 mt-4">
               <span className={cn(
                 "text-sm font-semibold font-mono px-3 py-1 rounded-lg border",
@@ -333,6 +351,11 @@ export default function PlayerProfile() {
           <SeasonSummary player={player} />
 
         </div>
+      </div>
+
+      {/* ── Percentile Rankings ── */}
+      <div className="mt-6">
+        <PercentileDashboard playerId={player.id} />
       </div>
 
       {/* ── Season Performance graph ── */}
