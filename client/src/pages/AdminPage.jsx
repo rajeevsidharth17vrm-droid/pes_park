@@ -10,6 +10,7 @@ import TradeApproval from "../components/admin/TradeApproval"
 import CreateTeam from "../components/admin/CreateTeam"
 import CreatePlayer from "../components/admin/CreatePlayer"
 import TeamLeagueResults from "../components/admin/TeamLeagueResults"
+import TeamLeaguePlayoffAdmin from "../components/admin/TeamLeaguePlayoffAdmin"
 import UclGroupsAdmin from "../components/admin/UclGroupsAdmin"
 import UclResults from "../components/admin/UclResults"
 import UclKnockoutAdmin from "../components/admin/UclKnockoutAdmin"
@@ -266,7 +267,8 @@ const TABS = [
   { id: "weekly",     label: "Weekend Series",       icon: Trophy          },
   { id: "quicktournament", label: "Quick Tournament", icon: Trophy  },
   { id: "fixtures",   label: "Fixtures",     icon: Calendar        },
-  { id: "teamresults",label: "Team Results", icon: Users           },
+  { id: "teamresults",  label: "Team Results",   icon: Users           },
+  { id: "teamplayoffs", label: "Team Knockout",  icon: Trophy          },
   { id: "trades",     label: "Trades",       icon: ArrowLeftRight  },
 ]
 
@@ -402,6 +404,9 @@ export default function AdminPage() {
         )}
         {activeTab === "teamresults" && !isLoading && (
           <TeamLeagueResults />
+        )}
+        {activeTab === "teamplayoffs" && (
+          <TeamLeaguePlayoffAdmin />
         )}
         {activeTab === "uclgroups" && !isLoading && (
           <UclGroupsAdmin />

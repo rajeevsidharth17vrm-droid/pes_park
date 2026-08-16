@@ -31,6 +31,20 @@ router.get("/", async (req, res, next) => {
 })
 
 // GET /api/players/:id — public
+// GET /api/players/:id/image — returns only the image_url, avatar_url, avatar_bg_url
+// Kept separate so the heavy base64 payload isn't included in every list response.
+router.get("/:id/image", async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT image_url AS "imageUrl", avatar_url AS "avatarUrl", avatar_bg_url AS "avatarBgUrl"
+       FROM players WHERE id = $1`,
+      [req.params.id]
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: "Player not found" })
+    res.json(result.rows[0])
+  } catch (err) { next(err) }
+})
+
 router.get("/:id", async (req, res, next) => {
   try {
     const playerRes = await query(
@@ -158,7 +172,7 @@ const updateSchema = z.object({
   isCaptain:     z.boolean().optional(),
   auctionPrice:  z.number().int().min(0).optional(),
   teamId:        z.number().int().positive().optional().nullable(),
-  imageUrl:      z.string().url().optional().nullable(),
+  imageUrl:      z.string().optional().nullable(),  // base64 data URI or URL
   trophy1Count:  z.number().int().min(0).optional(),
   trophy2Count:  z.number().int().min(0).optional(),
   trophy3Count:  z.number().int().min(0).optional(),
@@ -183,8 +197,8 @@ router.patch("/:id/avatar", async (req, res, next) => {
   try {
     const schema = z.object({
       avatarId:    z.string().max(64).regex(/^[a-zA-Z0-9_-]+$/).nullable().optional(),
-      avatarUrl:   z.string().url().nullable().optional(),
-      avatarBgUrl: z.string().url().nullable().optional(),
+      avatarUrl:   z.string().nullable().optional(),  // base64 data URI or URL
+      avatarBgUrl: z.string().nullable().optional(),  // base64 data URI or URL
     })
     const body = schema.parse(req.body)
 

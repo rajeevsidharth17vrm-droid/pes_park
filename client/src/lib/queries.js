@@ -285,6 +285,24 @@ export const useSeasonMatchRecords = (season) =>
     enabled:  !!season,
   })
 
+// Lazy image loaders — fetch base64 image only when the component needs it.
+// staleTime: 24h so the same image isn't re-fetched on every render.
+export const usePlayerImage = (playerId) =>
+  useQuery({
+    queryKey: ["player-image", playerId],
+    queryFn:  () => playersApi.image(playerId),
+    enabled:  !!playerId,
+    staleTime: 1000 * 60 * 60 * 24,
+  })
+
+export const useTeamLogo = (teamId) =>
+  useQuery({
+    queryKey: ["team-logo", teamId],
+    queryFn:  () => teamsApi.logo(teamId),
+    enabled:  !!teamId,
+    staleTime: 1000 * 60 * 60 * 24,
+  })
+
 export const useTeams = () =>
   useQuery({ queryKey: QK.teams, queryFn: teamsApi.list })
 
@@ -293,6 +311,49 @@ export const useTopScorers = () =>
 
 export const useTeamLeaguePlayoffs = () =>
   useQuery({ queryKey: ["team-league-playoffs"], queryFn: teamsApi.playoffsCurrent, staleTime: 0 })
+export const useGeneratePlayoffs = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: teamsApi.playoffsGenerate,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-league-playoffs"] }),
+  })
+}
+
+export const useResetPlayoffs = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: teamsApi.playoffsReset,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-league-playoffs"] }),
+  })
+}
+
+export const usePlayoffRecords = (playoffMatchId) =>
+  useQuery({
+    queryKey: ["playoff-records", playoffMatchId],
+    queryFn: () => teamsApi.playoffRecords(playoffMatchId),
+    enabled: !!playoffMatchId,
+    staleTime: 0,
+  })
+
+export const useLogPlayoffRecord = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body) => teamsApi.playoffRecordLog(body),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["playoff-records", vars.playoffMatchId] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+    },
+  })
+}
+
+export const usePlayoffResult = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, team1Score, team2Score }) =>
+      teamsApi.playoffsResult(id, { team1Score, team2Score }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-league-playoffs"] }),
+  })
+}
 
 export const useBestLeaguePerformer = (teamId) =>
   useQuery({

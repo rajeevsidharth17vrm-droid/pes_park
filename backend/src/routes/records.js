@@ -139,7 +139,7 @@ const createSchema = z.object({
   playerId:      z.number().int().positive(),
   opponentId:    z.number().int().positive(),
   result:        z.enum(["win", "draw", "loss"]),
-  matchType:     z.enum(["league", "ucl", "weekly", "quick"]).default("league"),
+  matchType:     z.enum(["league", "ucl", "weekly", "quick", "playoff"]).default("league"),
   playerScore:   z.number().int().min(0).optional(),
   opponentScore: z.number().int().min(0).optional(),
   date:          z.string().optional(),
@@ -315,6 +315,101 @@ router.delete("/team/:id", authenticate, async (req, res, next) => {
     await recalcForm(record.opponent_id)
 
     res.json({ deleted: true })
+  } catch (err) { next(err) }
+})
+
+// GET /api/records/playoff/:playoffMatchId — fetch player records for a playoff match
+router.get("/playoff/:playoffMatchId", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const result = await query(`
+      SELECT
+        mr.id,
+        mr.result,
+        mr.player_score   AS "playerScore",
+        mr.opponent_score AS "opponentScore",
+        mr.recorded_at    AS date,
+        p.id              AS "playerId",
+        p.name            AS "playerName",
+        p.team_id         AS "playerTeamId",
+        opp.id            AS "opponentId",
+        opp.name          AS "opponentName",
+        opp.team_id       AS "opponentTeamId"
+      FROM match_records mr
+      JOIN players p   ON mr.player_id   = p.id
+      JOIN players opp ON mr.opponent_id = opp.id
+      WHERE mr.match_type = 'playoff'
+        AND mr.fixture_id = $1
+      ORDER BY mr.recorded_at DESC, mr.id DESC
+    `, [req.params.playoffMatchId])
+    res.json(result.rows)
+  } catch (err) { next(err) }
+})
+
+// POST /api/records/playoff — admin logs individual player result for a playoff match
+router.post("/playoff", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const { playerId, opponentId, result, playerScore, opponentScore, playoffMatchId } = z.object({
+      playerId:       z.number().int().positive(),
+      opponentId:     z.number().int().positive(),
+      result:         z.enum(["win", "loss"]),   // no draws in playoffs
+      playerScore:    z.number().int().min(0).optional(),
+      opponentScore:  z.number().int().min(0).optional(),
+      playoffMatchId: z.number().int().positive(),
+    }).parse(req.body)
+
+    if (playerId === opponentId) {
+      return res.status(400).json({ error: "Player cannot play against themselves" })
+    }
+
+    // Verify playoff match exists and both players' teams are in it
+    const matchRes = await query(
+      "SELECT team1_id, team2_id, status FROM team_league_playoffs WHERE id = $1",
+      [playoffMatchId]
+    )
+    if (!matchRes.rows[0]) return res.status(404).json({ error: "Playoff match not found" })
+    const pm = matchRes.rows[0]
+    if (!pm.team1_id || !pm.team2_id) {
+      return res.status(400).json({ error: "Both teams must be set for this playoff match" })
+    }
+
+    const p1 = await query("SELECT team_id FROM players WHERE id = $1", [playerId])
+    const p2 = await query("SELECT team_id FROM players WHERE id = $1", [opponentId])
+    if (!p1.rows[0] || !p2.rows[0]) return res.status(404).json({ error: "Player not found" })
+
+    const validTeams = [pm.team1_id, pm.team2_id]
+    if (!validTeams.includes(p1.rows[0].team_id) || !validTeams.includes(p2.rows[0].team_id)) {
+      return res.status(400).json({ error: "Both players must belong to the teams in this playoff match" })
+    }
+    if (p1.rows[0].team_id === p2.rows[0].team_id) {
+      return res.status(400).json({ error: "Players must be from different teams" })
+    }
+
+    const seasonNumber = await getCurrentSeason()
+    const ins = await query(`
+      INSERT INTO match_records
+        (player_id, opponent_id, result, opponent_grade, match_type, player_score, opponent_score,
+         recorded_at, recorded_by, season_number, fixture_id, team_id)
+      VALUES ($1,$2,$3,'C','playoff',$4,$5,$6,$7,$8,$9,$10)
+      RETURNING *
+    `, [
+      playerId, opponentId, result, playerScore ?? null, opponentScore ?? null,
+      new Date().toISOString().slice(0, 10),
+      req.user.id, seasonNumber,
+      playoffMatchId,          // stored in fixture_id for linking
+      p1.rows[0].team_id,
+    ])
+
+    try {
+      await applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore)
+      await recalcMarketValue(playerId)
+      await recalcMarketValue(opponentId)
+      await recalcForm(playerId)
+      await recalcForm(opponentId)
+    } catch (recalcErr) {
+      console.error("Playoff record recalc failed (record still saved):", recalcErr)
+    }
+
+    res.status(201).json({ record: ins.rows[0] })
   } catch (err) { next(err) }
 })
 

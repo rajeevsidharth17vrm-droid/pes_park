@@ -362,6 +362,19 @@ router.get("/", async (req, res, next) => {
 })
 
 // GET /api/teams/:id — single team with roster
+// GET /api/teams/:id/logo — returns only the logo_url (base64 data URI)
+// Separate from the team list so the heavy base64 isn't sent for every team in every request.
+router.get("/:id/logo", async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT logo_url AS "logoUrl" FROM teams WHERE id = $1`,
+      [req.params.id]
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: "Team not found" })
+    res.json(result.rows[0])
+  } catch (err) { next(err) }
+})
+
 router.get("/:id", authenticate, async (req, res, next) => {
   try {
     const season = await getCurrentSeason()
@@ -514,8 +527,8 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
 // PATCH /api/teams/:id/settings — team owner (own team only) or admin updates name/logo/anthem
 const settingsSchema = z.object({
   name:      z.string().min(1).optional(),
-  logoUrl:   z.string().url().optional().nullable(),
-  anthemUrl: z.string().url().optional().nullable(),
+  logoUrl:   z.string().optional().nullable(),  // base64 data URI or URL
+  anthemUrl: z.string().optional().nullable(),  // base64 data URI or URL
 }).refine(d => d.name !== undefined || d.logoUrl !== undefined || d.anthemUrl !== undefined, {
   message: "Provide at least name, logoUrl, or anthemUrl",
 })
@@ -699,6 +712,7 @@ router.get("/playoffs/current", async (req, res, next) => {
   try {
     const season = await getCurrentSeason()
     const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
+    res.json({ matches: result.rows })
   } catch (err) { next(err) }
 })
 
@@ -723,6 +737,7 @@ router.post("/playoffs/generate", authenticate, adminOnly, async (req, res, next
     }
 
     const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
+    res.json({ matches: result.rows })
   } catch (err) { next(err) }
 })
 

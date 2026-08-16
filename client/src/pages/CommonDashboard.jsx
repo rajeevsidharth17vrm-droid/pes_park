@@ -143,11 +143,11 @@ function TeamRosterChips({ players, bestPerformerId, delay = 3000 }) {
   )
 }
 
-const PANEL_OPTIONS = [
-  { value: "standings",  label: "Auction Tour"    },
-  { value: "ucl",        label: "Solo Tour"             },
-  { value: "weekly",     label: "Weekend Series"          },
-  { value: "quick",      label: "Quick Tournament" },
+const BASE_PANEL_OPTIONS = [
+  { value: "standings",  label: "Auction Tour"        },
+  { value: "ucl",        label: "Solo Tour"            },
+  { value: "weekly",     label: "Weekend Series"       },
+  { value: "quick",      label: "Quick Tournament"     },
 ]
 
 export default function CommonDashboard() {
@@ -292,6 +292,7 @@ export default function CommonDashboard() {
 
   const playoffFinal    = playoffsData?.matches?.find(m => m.matchType === "final")
   const playoffComplete = playoffFinal?.status === "completed"
+  const hasPlayoffs     = (playoffsData?.matches?.length ?? 0) > 0
 
   // Champion is decided by the playoff Final winner (League + Knockout is
   // the only format now — format switching was removed).
@@ -681,25 +682,37 @@ export default function CommonDashboard() {
                 <StatCard label="Players"     value={players.length}                               sub="registered"      icon={Activity}   accent="bg-blue-400/15 text-blue-400"    />
               </div>
 
-              {/* Panel — only shown on the 4 main competition views */}
-              {["standings", "ucl", "weekly", "quick"].includes(activePanel) && (
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Dashboard view</p>
-                  <select
-                    value={activePanel}
-                    onChange={e => setActivePanel(e.target.value)}
-                    className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
-                  >
-                    {PANEL_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Panel — only shown on the main competition views */}
+              {["standings", "playoffs", "ucl", "weekly", "quick"].includes(activePanel) && (() => {
+                const panelOptions = hasPlayoffs
+                  ? [...BASE_PANEL_OPTIONS.slice(0, 1),
+                     { value: "playoffs", label: "Auction Tour Playoffs" },
+                     ...BASE_PANEL_OPTIONS.slice(1)]
+                  : BASE_PANEL_OPTIONS
+                return (
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Dashboard view</p>
+                    <select
+                      value={activePanel}
+                      onChange={e => setActivePanel(e.target.value)}
+                      className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+                    >
+                      {panelOptions.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })()}
 
               <div key={activePanel} className="animate-panel-in">
                 {activePanel === "players"   && <PlayersDirectory players={players} onPlayerClick={handlePlayer} />}
-                {activePanel === "standings" && <StandingsTable teams={teams} players={players} onPlayerClick={handlePlayer} view={standingsView} onViewChange={setStandingsView} />}
+                {activePanel === "standings" && (
+                  <StandingsTable teams={teams} players={players} onPlayerClick={handlePlayer} view={standingsView} onViewChange={setStandingsView} />
+                )}
+                {activePanel === "playoffs" && (
+                  <StandingsTable teams={teams} players={players} onPlayerClick={handlePlayer} view="playoffs" onViewChange={() => {}} />
+                )}
                 {activePanel === "ucl"       && <UclStandings onPlayerClick={handlePlayer} />}
                 {activePanel === "weekly"    && <WeeklyDashboard onPlayerClick={handlePlayer} />}
                 {activePanel === "quick"     && <QuickTournamentDashboard onPlayerClick={handlePlayer} />}

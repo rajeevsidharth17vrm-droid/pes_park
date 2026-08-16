@@ -266,10 +266,8 @@ SELECT
   p.trophy4_count AS "trophy4Count",
   t.name          AS team,
   p.team_id       AS "teamId",
-  t.logo_url      AS "teamLogo",
-  p.avatar_id     AS "avatarId",
-  p.avatar_url    AS "avatarUrl",
-  p.avatar_bg_url AS "avatarBgUrl"
+  p.is_captain    AS "isCaptain",
+  p.avatar_id     AS "avatarId"
 FROM players p
 LEFT JOIN teams t ON p.team_id = t.id;
 `

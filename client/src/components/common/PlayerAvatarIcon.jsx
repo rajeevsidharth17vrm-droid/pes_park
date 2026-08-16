@@ -1,15 +1,19 @@
 import { getAvatarById } from "../../lib/avatars"
+import { usePlayerImage } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 
-// Small icon shown inline next to a player's name in plain-text lists —
-// the character avatar they picked (custom upload or preset), NOT the
-// admin-set real photo (that's PlayerAvatar.jsx, used elsewhere and left
-// untouched). Renders nothing if the player hasn't set one — the name
-// stays exactly as plain text like it does now.
+// Small icon shown inline next to a player's name — the character avatar
+// they picked (custom upload or preset). Lazy-fetches the custom avatar
+// from DB when needed. Renders nothing if the player hasn't set one.
 export default function PlayerAvatarIcon({ player, size = "w-[43px] h-[43px]", className }) {
   if (!player) return null
   const preset = getAvatarById(player.avatarId)
-  const src = player.avatarUrl || preset?.thumb
+
+  // Only fetch from DB if player has no preset and no avatarUrl already in props
+  const needsFetch = !preset && !player.avatarUrl && player.id
+  const { data: imgData } = usePlayerImage(needsFetch ? player.id : null)
+
+  const src = player.avatarUrl || imgData?.avatarUrl || preset?.thumb
   if (!src) return null
 
   return (
