@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react"
-import { Pencil, Trash2, Check, X, AlertTriangle, ChevronDown, ChevronRight, Users, KeyRound } from "lucide-react"
-import { useTeams, useDeleteTeam, useUpdateTeam, useUnassignPlayer, useChangeTeamPassword } from "../../lib/queries"
+import { useState, useEffect, useRef } from "react"
+import { Pencil, Trash2, Check, X, AlertTriangle, ChevronDown, ChevronRight, Users, KeyRound, Camera, Loader2 } from "lucide-react"
+import { useTeams, useDeleteTeam, useUpdateTeam, useUnassignPlayer, useChangeTeamPassword, useUpdateTeamSettings } from "../../lib/queries"
+import { uploadTeamLogo } from "../../lib/supabase"
 import PlayerAvatar from "../common/PlayerAvatar"
-
 import { TeamAvatar } from "../common/TeamLogo"
 import { cn } from "../../lib/utils"
 
@@ -64,12 +64,23 @@ function TeamRow({ team, players }) {
   const [newPassword, setNewPassword]   = useState("")
   const [pwdError, setPwdError]         = useState("")
   const [pwdSuccess, setPwdSuccess]     = useState(false)
+
+  // Logo upload state
+  const [logoPreview, setLogoPreview]   = useState(team.logoUrl || null)
+  const [logoLoading, setLogoLoading]   = useState(false)
+  const logoInputRef                    = useRef(null)
+
   const updateTeam                      = useUpdateTeam()
   const deleteTeam                      = useDeleteTeam()
   const changePassword                  = useChangeTeamPassword()
+  const updateSettings                  = useUpdateTeamSettings()
 
   // Sync local state when team data updates from server
-  useEffect(() => { setName(team.name); setBudget(team.budget ?? 1000) }, [team.name, team.budget])
+  useEffect(() => {
+    setName(team.name)
+    setBudget(team.budget ?? 1000)
+    setLogoPreview(team.logoUrl || null)
+  }, [team.name, team.budget, team.logoUrl])
 
   const roster = players.filter(p => p.teamId === team.id)
 
@@ -114,6 +125,31 @@ function TeamRow({ team, players }) {
     setPwdSuccess(false)
   }
 
+  const handleLogoFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Show local preview immediately
+    setLogoPreview(URL.createObjectURL(file))
+    setLogoLoading(true)
+    try {
+      const publicUrl = await uploadTeamLogo(team.id, file)
+      updateSettings.mutate({ id: team.id, logoUrl: publicUrl }, {
+        onSuccess: () => {},
+        onError: (err) => {
+          alert(err.response?.data?.error || "Failed to save logo")
+          setLogoPreview(team.logoUrl || null)
+        },
+      })
+    } catch (err) {
+      alert(err.message || "Upload failed")
+      setLogoPreview(team.logoUrl || null)
+    } finally {
+      setLogoLoading(false)
+      // Reset input so the same file can be re-selected
+      if (logoInputRef.current) logoInputRef.current.value = ""
+    }
+  }
+
   return (
     <div className="border-b border-surface-border/60 last:border-b-0">
       <div className={cn(
@@ -128,14 +164,47 @@ function TeamRow({ team, players }) {
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
 
-        {/* Avatar */}
-        <TeamAvatar
-          logoUrl={team.logoUrl}
-          name={team.name}
-          size="w-8 h-8"
-          textSize="text-sm"
-          className="rounded-lg"
-          fallbackClassName="bg-surface-border text-slate-400 rounded-lg"
+        {/* Avatar — clickable for logo upload when editing */}
+        {editing ? (
+          <label
+            htmlFor={`logo-input-${team.id}`}
+            className="relative w-8 h-8 rounded-lg overflow-hidden cursor-pointer flex-shrink-0 group"
+            title="Upload team logo"
+          >
+            {logoPreview ? (
+              <img src={logoPreview} alt={team.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-surface-border rounded-lg flex items-center justify-center text-slate-400 text-sm font-bold">
+                {team.name?.charAt(0) || "?"}
+              </div>
+            )}
+            {/* Hover overlay */}
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+              {logoLoading
+                ? <Loader2 className="w-3 h-3 text-white animate-spin" />
+                : <Camera className="w-3 h-3 text-white" />
+              }
+            </div>
+          </label>
+        ) : (
+          <TeamAvatar
+            logoUrl={team.logoUrl}
+            name={team.name}
+            size="w-8 h-8"
+            textSize="text-sm"
+            className="rounded-lg"
+            fallbackClassName="bg-surface-border text-slate-400 rounded-lg"
+          />
+        )}
+
+        {/* Hidden file input */}
+        <input
+          id={`logo-input-${team.id}`}
+          ref={logoInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleLogoFile}
+          className="hidden"
         />
 
         {/* Name */}
@@ -157,6 +226,10 @@ function TeamRow({ team, players }) {
             <Users className="w-3 h-3" /> {roster.length} player{roster.length !== 1 ? "s" : ""} · {team.points} pts
             <span className="text-emerald-400/80 font-mono ml-1">· Purse: {team.purse ?? team.budget ?? 1000} <span className="text-slate-600">(budget {team.budget ?? 1000})</span></span>
           </p>
+          {/* Logo upload hint — only visible while editing */}
+          {editing && (
+            <p className="text-xs text-accent/70 mt-0.5">Click the logo to change it</p>
+          )}
         </div>
 
         {/* Confirm delete warning */}
@@ -171,7 +244,7 @@ function TeamRow({ team, players }) {
         <div className="flex items-center gap-2 flex-shrink-0">
           {editing ? (
             <>
-              <button onClick={() => { setEditing(false); setName(team.name); setBudget(team.budget ?? 1000) }}
+              <button onClick={() => { setEditing(false); setName(team.name); setBudget(team.budget ?? 1000); setLogoPreview(team.logoUrl || null) }}
                 className="w-7 h-7 rounded-lg border border-surface-border flex items-center justify-center text-slate-400 hover:text-white transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -205,7 +278,7 @@ function TeamRow({ team, players }) {
               </button>
               <button onClick={() => { setEditing(true); setChangingPwd(false) }}
                 className="w-7 h-7 rounded-lg hover:bg-surface flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-                title="Edit name">
+                title="Edit team">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => setConfirmDel(true)}
@@ -291,7 +364,7 @@ export default function ManageTeams({ players = [] }) {
       <div className="px-5 py-4 border-b border-surface-border">
         <h3 className="text-sm font-semibold text-white">Existing teams</h3>
         <p className="text-xs text-slate-500 mt-0.5">
-          Click a team to expand its roster · pencil to rename · key to reset password · trash to delete
+          Click a team to expand its roster · pencil to edit name, budget & logo · key to reset password · trash to delete
         </p>
       </div>
       {teams.length === 0 ? (
