@@ -82,7 +82,18 @@ router.get("/:id", async (req, res, next) => {
       LEFT JOIN teams ot ON opp.team_id = ot.id
       JOIN players p2 ON mr.player_id = p2.id
       LEFT JOIN teams pt ON p2.team_id = pt.id
-      WHERE mr.player_id = $1 OR mr.opponent_id = $1
+      WHERE (
+        mr.player_id = $1
+        OR (
+          mr.opponent_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM match_records r2
+            WHERE r2.player_id   = $1
+              AND r2.opponent_id = mr.player_id
+              AND r2.match_type  = mr.match_type
+          )
+        )
+      )
       ORDER BY mr.recorded_at DESC, mr.id DESC
     `, [req.params.id])
 
@@ -353,8 +364,19 @@ router.get("/:id/compare-stats", async (req, res, next) => {
           match_type::text AS match_type,
           CASE WHEN player_id = $1 THEN player_score ELSE opponent_score END AS goals_scored,
           CASE WHEN player_id = $1 THEN opponent_score ELSE player_score END AS goals_conceded
-        FROM match_records
-        WHERE player_id = $1 OR opponent_id = $1
+        FROM match_records mr
+        WHERE (
+          player_id = $1
+          OR (
+            opponent_id = $1
+            AND NOT EXISTS (
+              SELECT 1 FROM match_records r2
+              WHERE r2.player_id   = $1
+                AND r2.opponent_id = mr.player_id
+                AND r2.match_type  = mr.match_type
+            )
+          )
+        )
       `, [req.params.id]),
       query(`
         SELECT trophy1_count, trophy2_count, trophy3_count, trophy4_count,
@@ -466,7 +488,20 @@ router.get("/:id/performance-zones", async (req, res, next) => {
         LEFT JOIN weekly_tournaments wt ON wt.id = wtm.tournament_id
         LEFT JOIN quick_tournament_matches qtm ON qtm.match_record_id = mr.id
         LEFT JOIN quick_tournaments qt ON qt.id = qtm.tournament_id
-        WHERE (mr.player_id=$1 OR mr.opponent_id=$1) AND mr.season_number=$2
+        WHERE mr.season_number=$2
+          AND (
+            mr.player_id=$1
+            OR (
+              mr.opponent_id=$1
+              AND NOT EXISTS (
+                SELECT 1 FROM match_records r2
+                WHERE r2.player_id   = $1
+                  AND r2.opponent_id = mr.player_id
+                  AND r2.match_type  = mr.match_type
+                  AND r2.season_number = mr.season_number
+              )
+            )
+          )
         ORDER BY mr.recorded_at ASC
       `, [req.params.id, seasonNum])
 

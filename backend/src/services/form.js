@@ -6,11 +6,10 @@ import { query } from "../db/pool.js"
 // (win -> loss, loss -> win) since match_records is stored from the
 // player_id side.
 //
-// This is the single source of truth for the `players.form` column —
-// every route that writes a match_records row (records.js, ucl.js,
-// uclKnockout.js, weekly.js) should call this for both players involved
-// right after saving/editing/deleting a result, the same way they call
-// recalcMarketValue().
+// Each game is counted once: records where the player is player_id are
+// always included; opponent_id records are only included if no reverse
+// record exists, which prevents the same game from appearing twice when
+// both teams log their side of the same matchup.
 export async function recalcForm(playerId) {
   const res = await query(`
     SELECT
@@ -20,8 +19,19 @@ export async function recalcForm(playerId) {
         WHEN result = 'loss' THEN 'win'
         ELSE 'draw'
       END AS result
-    FROM match_records
-    WHERE player_id = $1 OR opponent_id = $1
+    FROM match_records mr
+    WHERE (
+      player_id = $1
+      OR (
+        opponent_id = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM match_records r2
+          WHERE r2.player_id   = $1
+            AND r2.opponent_id = mr.player_id
+            AND r2.match_type  = mr.match_type
+        )
+      )
+    )
     ORDER BY recorded_at DESC, id DESC
     LIMIT 5
   `, [playerId])

@@ -10,6 +10,13 @@
  * Market value is recalculated from scratch (sum of all match deltas for
  * the current season), floored at 0. BDR and best_player_points are
  * applied incrementally per match (see records route).
+ *
+ * Deduplication rule (applies to all recalc functions):
+ *   Each actual game is counted ONCE from the player's perspective.
+ *   - Records where they are player_id are always counted.
+ *   - Records where they are opponent_id are only counted if no reverse
+ *     record exists (handles admin-logged single records; skips the mirror
+ *     record created when the opposing team also logs their side).
  */
 import { query } from "../db/pool.js"
 
@@ -49,6 +56,25 @@ export function matchBpDelta(result) {
   return BP_DELTA[result] ?? 0
 }
 
+// Shared dedup WHERE clause: count each actual game exactly once.
+// player_id records always count; opponent_id records only count when no
+// reverse record exists (prevents double-counting when both teams log).
+const DEDUP_WHERE = (seasonFilter = true) => `
+  AND (
+    player_id = $1
+    OR (
+      opponent_id = $1
+      AND NOT EXISTS (
+        SELECT 1 FROM match_records r2
+        WHERE r2.player_id    = $1
+          AND r2.opponent_id  = mr.player_id
+          AND r2.match_type   = mr.match_type
+          ${seasonFilter ? "AND r2.season_number = mr.season_number" : ""}
+      )
+    )
+  )
+`
+
 /**
  * Recalculates and persists a player's market_value from ALL their match
  * records in the current season. Pure sum of flat deltas, floored at 0.
@@ -56,7 +82,6 @@ export function matchBpDelta(result) {
 export async function recalcMarketValue(playerId) {
   const currentSeason = await getCurrentSeason()
 
-  // Get every match this player was involved in this season, from THEIR perspective
   const matchesRes = await query(
     `SELECT
        CASE
@@ -69,8 +94,9 @@ export async function recalcMarketValue(playerId) {
          WHEN player_id = $1 THEN player_score
          ELSE opponent_score
        END AS goals
-     FROM match_records
-     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
+     FROM match_records mr
+     WHERE season_number = $2
+     ${DEDUP_WHERE(true)}`,
     [playerId, currentSeason]
   )
 
@@ -98,8 +124,10 @@ export async function recalcBestPlayer(playerId) {
          WHEN result = 'loss' THEN 'win'
          ELSE 'draw'
        END AS result
-     FROM match_records
-     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2 AND match_type = 'league'`,
+     FROM match_records mr
+     WHERE season_number = $2
+       AND match_type = 'league'
+     ${DEDUP_WHERE(true)}`,
     [playerId, currentSeason]
   )
 
@@ -138,8 +166,9 @@ export async function recalcBdrFromMatches(playerId) {
          WHEN player_id = $1 THEN player_score
          ELSE opponent_score
        END AS goals
-     FROM match_records
-     WHERE (player_id = $1 OR opponent_id = $1) AND season_number = $2`,
+     FROM match_records mr
+     WHERE season_number = $2
+     ${DEDUP_WHERE(true)}`,
     [playerId, currentSeason]
   )
 

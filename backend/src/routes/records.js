@@ -216,7 +216,15 @@ router.post("/team", authenticate, async (req, res, next) => {
 
     let recalcError = null
     try {
-      await applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore)
+      // Only apply BDR to the logging team's own player (playerId).
+      // The opponent's team applies BDR to their player when THEY log their result.
+      // Calling applyMatchDeltas (which awards both sides) here AND when the opponent's
+      // team logs their result causes every matchup to be double-counted.
+      const playerBdr = matchBdrDelta(result, playerScore ?? 0)
+      if (playerBdr) await addBdr(playerId, playerBdr)
+      await recalcBestPlayer(playerId)
+
+      // MV and form recalc from scratch — safe for both sides, no double-count risk
       await recalcMarketValue(playerId)
       await recalcMarketValue(opponentId)
       await recalcForm(playerId)
@@ -263,15 +271,19 @@ router.patch("/team/:id", authenticate, async (req, res, next) => {
       return res.status(403).json({ error: "You can only edit your own team's logged results" })
     }
 
-    // Reverse old BDR deltas, then apply new ones
-    await reverseMatchDeltas(record.player_id, record.opponent_id, record.old_result, record.old_player_score, record.old_opponent_score)
+    // Only reverse/apply BDR for the logging team's own player (same one-sided
+    // logic as POST /team — opponent's BDR is their team's responsibility).
+    const oldPlayerBdr = matchBdrDelta(record.old_result, record.old_player_score ?? 0)
+    if (oldPlayerBdr) await addBdr(record.player_id, -oldPlayerBdr)
 
     await query(
       `UPDATE match_records SET result = $1, player_score = $2, opponent_score = $3 WHERE id = $4`,
       [result, playerScore ?? null, opponentScore ?? null, req.params.id]
     )
 
-    await applyMatchDeltas(record.player_id, record.opponent_id, result, playerScore, opponentScore)
+    const newPlayerBdr = matchBdrDelta(result, playerScore ?? 0)
+    if (newPlayerBdr) await addBdr(record.player_id, newPlayerBdr)
+    await recalcBestPlayer(record.player_id)
     await recalcMarketValue(record.player_id)
     await recalcMarketValue(record.opponent_id)
     await recalcForm(record.player_id)
@@ -302,8 +314,9 @@ router.delete("/team/:id", authenticate, async (req, res, next) => {
       return res.status(403).json({ error: "You can only delete your own team's logged results" })
     }
 
-    // Reverse BDR deltas before deleting
-    await reverseMatchDeltas(record.player_id, record.opponent_id, record.result, record.player_score, record.opponent_score)
+    // Only reverse BDR for the logging team's own player (one-sided, matching POST /team)
+    const playerBdr = matchBdrDelta(record.result, record.player_score ?? 0)
+    if (playerBdr) await addBdr(record.player_id, -playerBdr)
 
     await query("DELETE FROM match_records WHERE id = $1", [req.params.id])
 
