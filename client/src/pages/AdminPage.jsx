@@ -100,6 +100,69 @@ function ResetMVCard() {
   )
 }
 
+
+function RecalcMVCard() {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult]   = useState(null)  // { updated: N } | null
+  const [error, setError]     = useState(null)
+
+  async function handleRecalc() {
+    setLoading(true)
+    setResult(null)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL?.replace("/api","") || "https://pes-park.onrender.com"}/admin/recalc-mv`,
+        {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Recalc failed")
+      setResult(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (result) {
+    return (
+      <div className="card p-6 border-emerald-500/30 bg-emerald-500/5 text-center">
+        <p className="text-emerald-400 font-semibold text-lg mb-1">✅ Recalculation complete!</p>
+        <p className="text-sm text-slate-400">
+          MV, BDR & Best Player recalculated for <span className="text-white font-semibold">{result.updated}</span> players from match records.
+        </p>
+        <button onClick={() => setResult(null)} className="mt-3 text-xs text-slate-500 hover:text-white transition-colors">Dismiss</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card p-6 flex items-center justify-between gap-4">
+      <div className="flex items-start gap-3">
+        <Activity className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-white font-semibold">Recalculate MV, BDR & Best Player</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Recompute all player stats from match records. Run this after fixing any logged results or after a bulk import.
+          </p>
+          {error && <p className="text-xs text-rose-400 mt-1">{error}</p>}
+        </div>
+      </div>
+      <button
+        onClick={handleRecalc}
+        disabled={loading}
+        className="flex-shrink-0 px-4 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 text-sm font-semibold transition-colors disabled:opacity-40"
+      >
+        {loading ? "Recalculating…" : "Recalc MV"}
+      </button>
+    </div>
+  )
+}
+
 function SeasonResetCard() {
   const [confirm, setConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -376,10 +439,13 @@ export default function AdminPage() {
       <SeasonRecordsAdmin />
     </div>
 
-    {/* Market Value Reset */}
+    {/* Market Value */}
     <div>
       <p className="section-label mb-3">Market Value</p>
-      <ResetMVCard />
+      <div className="space-y-3">
+        <RecalcMVCard />
+        <ResetMVCard />
+      </div>
     </div>
 
     {/* Season Reset */}
