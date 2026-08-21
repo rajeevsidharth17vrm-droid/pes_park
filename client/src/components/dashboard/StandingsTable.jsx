@@ -60,14 +60,11 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
   const scorerRankChanges = useRankChanges("league-golden-boot", scorers.map(s => s.id))
 
   // Best Player — pre-compute here so the hook is always called unconditionally
-  const bpPlayers = players.map(p => ({
-    ...p,
-    bpAvg: p.bestPlayerMatches > 0 ? p.bestPlayerPoints / p.bestPlayerMatches : 0
-  }))
+  const bpPlayers = players.map(p => ({ ...p }))
   const bpSorted = [...bpPlayers].sort((a, b) =>
-    (b.bpAvg - a.bpAvg) || (b.bestPlayerMatches - a.bestPlayerMatches) || a.name.localeCompare(b.name)
+    (b.bestPlayerPoints - a.bestPlayerPoints) || (b.bestPlayerMatches - a.bestPlayerMatches) || a.name.localeCompare(b.name)
   )
-  const bpMax = bpSorted[0]?.bpAvg || 1
+  const bpMax = bpSorted[0]?.bestPlayerPoints || 1
   const bpRankChanges = useRankChanges("best-player-ranking", bpSorted.map(p => p.id))
   const { data: playoffsData } = useTeamLeaguePlayoffs()
   const { data: fixtures = [] } = useFixtures()
@@ -337,7 +334,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
           <div className="divide-y divide-surface-border">
             {bpSorted.map((player, idx) => {
               const isFirst = idx === 0
-              const barPct  = (player.bpAvg / bpMax) * 100
+              const barPct  = (player.bestPlayerPoints / bpMax) * 100
               const preset  = getAvatarById(player.avatarId)
               const avatarSrc = player.avatarUrl || preset?.thumb
               return (
@@ -384,7 +381,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                   {/* Points */}
                   <div className="text-right flex-shrink-0">
                     <span className={cn("font-bold text-sm font-mono", isFirst ? "text-emerald-400" : "text-white")}>
-                      {player.bpAvg.toFixed(2)}
+                      {player.bestPlayerPoints}
                     </span>
                     <p className="text-xs text-slate-600 mt-0.5">{player.bestPlayerMatches || 0} matches</p>
                   </div>
