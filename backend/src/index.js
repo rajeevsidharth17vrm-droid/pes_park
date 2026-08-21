@@ -78,7 +78,7 @@ app.patch("/api/settings", authenticate, adminOnly, async (req, res) => {
 // full corrected JS formula (both sides + BDR). Hit once after deploying the
 // marketValue.js fix to correct stale MVs. Admin auth required.
 import { query } from "./db/pool.js"
-import { recalcMarketValue, recalcBdrFromMatches, recalcBestPlayer } from "./services/marketValue.js"
+import { recalcMarketValue, recalcBestPlayer } from "./services/marketValue.js"
 import { authenticate, adminOnly } from "./middleware/auth.js"
 
 app.post("/admin/recalc-mv", authenticate, adminOnly, async (req, res) => {
@@ -100,8 +100,8 @@ app.post("/admin/recalc-mv", authenticate, adminOnly, async (req, res) => {
 
     for (const id of ids) {
       await recalcMarketValue(id)
-      await recalcBdrFromMatches(id)
       await recalcBestPlayer(id)
+      // BDR is now tournament-placement only — recalcBdrFromMatches is no longer called
     }
 
     res.json({ success: true, updated: ids.length, message: `Recalculated MV, BDR, and Best Player for ${ids.length} players` })

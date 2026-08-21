@@ -63,10 +63,12 @@ export async function generatePlayoffs(season) {
       FROM fixture_scores
     ),
     per_team AS (
-      SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga, home_pts AS pts
+      SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga,
+        CASE WHEN outcome = 'home' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts
         FROM fixture_outcomes WHERE outcome IS NOT NULL
       UNION ALL
-      SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga, away_pts AS pts
+      SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga,
+        CASE WHEN outcome = 'away' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts
         FROM fixture_outcomes WHERE outcome IS NOT NULL
     ),
     team_stats AS (

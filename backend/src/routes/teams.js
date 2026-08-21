@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs"
 import { query } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
 import { generatePlayoffs } from "../services/playoffs.js"
+import { awardLeaguePlayoffBdr } from "../services/bdrAwards.js"
 
 const router = Router()
 
@@ -317,11 +318,15 @@ router.get("/", async (req, res, next) => {
         FROM fixture_scores
       ),
       per_team AS (
-        SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga, home_pts AS pts, outcome,
+        SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga,
+          CASE WHEN outcome = 'home' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts,
+          outcome,
           (outcome = 'home') AS won, (outcome = 'draw') AS drawn, (outcome = 'away') AS lost
         FROM fixture_outcomes WHERE outcome IS NOT NULL
         UNION ALL
-        SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga, away_pts AS pts, outcome,
+        SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga,
+          CASE WHEN outcome = 'away' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts,
+          outcome,
           (outcome = 'away') AS won, (outcome = 'draw') AS drawn, (outcome = 'home') AS lost
         FROM fixture_outcomes WHERE outcome IS NOT NULL
       ),
@@ -426,11 +431,15 @@ router.get("/:id", authenticate, async (req, res, next) => {
         FROM fixture_scores
       ),
       per_team AS (
-        SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga, home_pts AS pts, outcome,
+        SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga,
+          CASE WHEN outcome = 'home' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts,
+          outcome,
           (outcome = 'home') AS won, (outcome = 'draw') AS drawn, (outcome = 'away') AS lost
         FROM fixture_outcomes WHERE outcome IS NOT NULL
         UNION ALL
-        SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga, away_pts AS pts, outcome,
+        SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga,
+          CASE WHEN outcome = 'away' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts,
+          outcome,
           (outcome = 'away') AS won, (outcome = 'draw') AS drawn, (outcome = 'home') AS lost
         FROM fixture_outcomes WHERE outcome IS NOT NULL
       ),
@@ -781,6 +790,14 @@ router.patch("/playoffs/:id/result", authenticate, adminOnly, async (req, res, n
       await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
     } else if (match.match_type === "final") {
       // Final completed — champion determined
+    }
+
+    // Award BDR to all players on the relevant team(s) based on placement.
+    // Uses claimAward internally so re-saving the same result is safe.
+    try {
+      await awardLeaguePlayoffBdr(match.match_type, winnerId, loserId, match.season_number)
+    } catch (bdrErr) {
+      console.error("League playoff BDR award failed (result still saved):", bdrErr)
     }
 
     const fresh = await query(PLAYOFF_SELECT + " WHERE p.id = $1", [match.id])

@@ -4,6 +4,7 @@ import { query, withTransaction } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
 import { recalcMarketValue } from "../services/marketValue.js"
 import { recalcForm } from "../services/form.js"
+import { awardWeeklyTournamentBdr } from "../services/bdrAwards.js"
 
 const router = Router()
 
@@ -456,6 +457,12 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
         [match.tournament_id, totalRounds]
       )
 
+      // Award BDR based on how far each player progressed
+      try {
+        await awardWeeklyTournamentBdr(match.tournament_id)
+      } catch (bdrErr) {
+        console.error("Weekly BDR award failed (tournament still marked complete):", bdrErr)
+      }
     }
 
     res.json({ updated: true, winnerId, nextRound: match.round + 1 })

@@ -4,6 +4,7 @@ import { query } from "../db/pool.js"
 import { authenticate, adminOnly } from "../middleware/auth.js"
 import { recalcMarketValue } from "../services/marketValue.js"
 import { recalcForm } from "../services/form.js"
+import { awardUclKnockoutBdr } from "../services/bdrAwards.js"
 
 const router = Router()
 const TOTAL_ROUNDS = 5   // R32 → R16 → QF → SF → Final
@@ -343,6 +344,12 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
         [match.tournament_id]
       )
 
+      // Award BDR based on how far each player progressed
+      try {
+        await awardUclKnockoutBdr(match.tournament_id, TOTAL_ROUNDS)
+      } catch (bdrErr) {
+        console.error("UCL KO BDR award failed (tournament still marked complete):", bdrErr)
+      }
     }
 
     res.json({ updated: true, winnerId })
