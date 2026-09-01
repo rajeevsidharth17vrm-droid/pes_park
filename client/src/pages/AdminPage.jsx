@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { LayoutDashboard, Users, Activity, Calendar, ArrowLeftRight, Shield, Settings, AlertTriangle, RotateCcw, Trophy } from "lucide-react"
 import Layout from "../components/layout/Layout"
@@ -168,12 +169,17 @@ function SeasonResetCard() {
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
   const [error, setError]     = useState(null)
+  const queryClient           = useQueryClient()
 
   async function handleReset() {
     setLoading(true)
     setError(null)
     try {
       await teamsApi.seasonReset()
+      // Nuke every cached query so all tabs immediately reflect the cleared data —
+      // without this, UCL groups, standings, fixtures and player stats all stay
+      // stale until the page is manually refreshed.
+      await queryClient.invalidateQueries()
       setDone(true)
       setConfirm(false)
     } catch (err) {
@@ -246,6 +252,7 @@ function DeleteSeasonCard() {
   const [done, setDone]       = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError]     = useState(null)
+  const queryClient           = useQueryClient()
 
   async function handleDelete() {
     setLoading(true)
@@ -253,6 +260,9 @@ function DeleteSeasonCard() {
     try {
       const result = await teamsApi.seasonDelete()
       setMessage(result.message)
+      // Same cache nuke as season reset — ensures UCL groups, standings,
+      // fixtures, and player stats all reload fresh on the next render.
+      await queryClient.invalidateQueries()
       setDone(true)
       setConfirm(false)
     } catch (err) {

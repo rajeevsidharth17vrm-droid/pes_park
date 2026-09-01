@@ -478,6 +478,9 @@ router.get("/standings", async (req, res, next) => {
   try {
     const groupsRes = await query("SELECT * FROM ucl_groups WHERE status = 'active' ORDER BY name ASC")
 
+    const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
+    const currentSeason = parseInt(seasonRes.rows[0]?.value || "1")
+
     const statsRes = await query(`
       SELECT
         p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team, t.logo_url AS "teamLogo",
@@ -495,11 +498,13 @@ router.get("/standings", async (req, res, next) => {
       FROM players p
       LEFT JOIN teams t ON p.team_id = t.id
       LEFT JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id) AND mr.match_type = 'ucl'
+        ON (mr.player_id = p.id OR mr.opponent_id = p.id)
+        AND mr.match_type = 'ucl'
+        AND mr.season_number = $1
         AND NOT EXISTS (SELECT 1 FROM ucl_knockout_matches km WHERE km.match_record_id = mr.id)
       WHERE p.ucl_group_id IS NOT NULL
       GROUP BY p.id, p.name, p.ucl_group_id, t.name, t.logo_url, p.avatar_id, p.avatar_url
-    `)
+    `, [currentSeason])
 
     const groups = groupsRes.rows.map(g => {
       const players = statsRes.rows

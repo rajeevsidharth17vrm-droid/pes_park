@@ -6,7 +6,7 @@ import { TeamLogoIcon } from "../common/TeamLogo"
 import PlayerAvatarIcon from "../common/PlayerAvatarIcon"
 import RankBadge from "../common/RankBadge"
 import { useRankChanges } from "../../hooks/useRankChanges"
-import quickLogo from "../../../images/Quick Tournament.png" // reused — no dedicated Quick Tournament asset yet
+import quickLogo from "../../../images/qt.png"
 import goldenBootLogo from "../../../images/Golden Boot.png"
 
 // Same stage-naming logic as the admin bracket view (QuickTournamentBracket.jsx),
