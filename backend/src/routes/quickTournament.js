@@ -111,10 +111,13 @@ router.get("/public/top-scorers", async (req, res, next) => {
     )
     if (!t.rows[0]) return res.json([])
 
+    const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
+    const season = parseInt(seasonRes.rows[0]?.value || "1")
+
     const result = await query(`
       SELECT
         p.id, p.name, t.name AS team, t.logo_url AS "teamLogo",
-        p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl",
+        p.avatar_id AS "avatarId",
         COALESCE(SUM(
           CASE
             WHEN mr.player_id   = p.id THEN COALESCE(mr.player_score, 0)
@@ -130,15 +133,16 @@ router.get("/public/top-scorers", async (req, res, next) => {
           END
         ), 0) AS conceded
       FROM players p
+      JOIN quick_tournament_players qtp ON qtp.player_id = p.id AND qtp.tournament_id = $1
       JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id) AND mr.match_type = 'quick'
-      JOIN quick_tournament_matches wtm ON wtm.match_record_id = mr.id
+        ON (mr.player_id = p.id OR mr.opponent_id = p.id)
+        AND mr.match_type = 'quick'
+        AND mr.season_number = $2
       LEFT JOIN teams t ON p.team_id = t.id
-      WHERE wtm.tournament_id = $1
-      GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url
+      GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
-    `, [t.rows[0].id])
+    `, [t.rows[0].id, season])
     res.json(result.rows)
   } catch (err) { next(err) }
 })
@@ -158,7 +162,7 @@ router.get("/:id", async (req, res, next) => {
     if (!t.rows[0]) return res.status(404).json({ error: "Tournament not found" })
 
     const players = await query(`
-      SELECT wtp.seed, p.id, p.name, t.name AS team, t.logo_url AS "teamLogo", p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl"
+      SELECT wtp.seed, p.id, p.name, t.name AS team, t.logo_url AS "teamLogo", p.avatar_id AS "avatarId"
       FROM quick_tournament_players wtp
       JOIN players p ON p.id = wtp.player_id
       LEFT JOIN teams t ON p.team_id = t.id
@@ -170,9 +174,9 @@ router.get("/:id", async (req, res, next) => {
       SELECT
         wtm.*,
         p1.name AS "player1Name",
-        p1.avatar_id AS "player1AvatarId", p1.avatar_url AS "player1AvatarUrl", p1.avatar_bg_url AS "player1AvatarBgUrl",
+        p1.avatar_id AS "player1AvatarId",
         p2.name AS "player2Name",
-        p2.avatar_id AS "player2AvatarId", p2.avatar_url AS "player2AvatarUrl", p2.avatar_bg_url AS "player2AvatarBgUrl",
+        p2.avatar_id AS "player2AvatarId",
         w.name  AS "winnerName"
       FROM quick_tournament_matches wtm
       LEFT JOIN players p1 ON wtm.player1_id = p1.id
@@ -364,7 +368,7 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
     }).parse(req.body)
 
     const matchRes = await query(`
-      SELECT wtm.*, wt.season_number, wt.total_rounds, wt.id AS "tournamentId"
+      SELECT wtm.*, wt.total_rounds, wt.id AS "tournamentId"
       FROM quick_tournament_matches wtm
       JOIN quick_tournaments wt ON wt.id = wtm.tournament_id
       WHERE wtm.id = $1
@@ -393,28 +397,29 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
 
     const oldMatchRecordId = match.match_record_id
 
-    // Log new match record
-    const mrRes = await query(`
-      INSERT INTO match_records
-        (player_id, opponent_id, result, opponent_grade, match_type, player_score, opponent_score, recorded_at, season_number)
-      VALUES ($1,$2,$3,$4,'quick',$5,$6,NOW(),$7)
-      RETURNING id
-    `, [match.player1_id, match.player2_id, result, oppGrade, player1Score, player2Score, season])
-    const mrId = mrRes.rows[0]?.id
+    // Wrap in a transaction so a missing match_record_id column (or any
+    // other DB error) rolls back the match_record INSERT automatically —
+    // prevents orphaned match_records rows if the UPDATE fails.
+    await withTransaction(async ({ query: q }) => {
+      const mrRes = await q(`
+        INSERT INTO match_records
+          (player_id, opponent_id, result, opponent_grade, match_type, player_score, opponent_score, recorded_at, season_number)
+        VALUES ($1,$2,$3,$4,'quick',$5,$6,NOW(),$7)
+        RETURNING id
+      `, [match.player1_id, match.player2_id, result, oppGrade, player1Score, player2Score, season])
+      const mrId = mrRes.rows[0]?.id
 
-    // Update the match result to point at the new record BEFORE deleting the
-    // old one — deleting first would violate the match_record_id foreign key
-    // while quick_tournament_matches still referenced that row.
-    await query(`
-      UPDATE quick_tournament_matches
-      SET player1_score=$1, player2_score=$2, winner_id=$3, status='completed', match_record_id=$4
-      WHERE id=$5
-    `, [player1Score, player2Score, winnerId, mrId, req.params.matchId])
+      // Re-point BEFORE deleting old record to avoid FK violation
+      await q(`
+        UPDATE quick_tournament_matches
+        SET player1_score=$1, player2_score=$2, winner_id=$3, status='completed', match_record_id=$4
+        WHERE id=$5
+      `, [player1Score, player2Score, winnerId, mrId, req.params.matchId])
 
-    // Now safe to delete the old match record, if this was an edit
-    if (oldMatchRecordId) {
-      await query("DELETE FROM match_records WHERE id = $1", [oldMatchRecordId])
-    }
+      if (oldMatchRecordId) {
+        await q("DELETE FROM match_records WHERE id = $1", [oldMatchRecordId])
+      }
+    })
 
     // Recalc market value for both players — the DB trigger alone only
     // handles the player_id side and skips the BDR swing (see marketValue.js).

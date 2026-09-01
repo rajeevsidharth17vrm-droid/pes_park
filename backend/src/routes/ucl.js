@@ -81,7 +81,7 @@ router.get("/admin-groups", authenticate, adminOnly, async (req, res, next) => {
   try {
     const groupsRes = await query("SELECT * FROM ucl_groups ORDER BY name ASC")
     const playersRes = await query(`
-      SELECT p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team, t.logo_url AS "teamLogo", p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl"
+      SELECT p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team, p.avatar_id AS "avatarId"
       FROM players p
       LEFT JOIN teams t ON p.team_id = t.id
       WHERE p.ucl_group_id IS NOT NULL
@@ -330,7 +330,7 @@ router.get("/groups", async (req, res, next) => {
   try {
     const groupsRes = await query("SELECT * FROM ucl_groups WHERE status = 'active' ORDER BY name ASC")
     const playersRes = await query(`
-      SELECT p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team, t.logo_url AS "teamLogo", p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl"
+      SELECT p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team, p.avatar_id AS "avatarId"
       FROM players p
       LEFT JOIN teams t ON p.team_id = t.id
       WHERE p.ucl_group_id IS NOT NULL
@@ -348,7 +348,7 @@ router.get("/groups", async (req, res, next) => {
 router.get("/unassigned", authenticate, adminOnly, async (req, res, next) => {
   try {
     const result = await query(`
-      SELECT p.id, p.name, t.name AS team, t.logo_url AS "teamLogo", p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl"
+      SELECT p.id, p.name, t.name AS team, p.avatar_id AS "avatarId"
       FROM players p
       LEFT JOIN teams t ON p.team_id = t.id
       WHERE p.ucl_group_id IS NULL
@@ -483,8 +483,8 @@ router.get("/standings", async (req, res, next) => {
 
     const statsRes = await query(`
       SELECT
-        p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team, t.logo_url AS "teamLogo",
-        p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl",
+        p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team,
+        p.avatar_id AS "avatarId",
         COUNT(mr.id) AS played,
         SUM(CASE
           WHEN (mr.player_id = p.id AND mr.result = 'win') OR (mr.opponent_id = p.id AND mr.result = 'loss') THEN 1 ELSE 0
@@ -503,7 +503,7 @@ router.get("/standings", async (req, res, next) => {
         AND mr.season_number = $1
         AND NOT EXISTS (SELECT 1 FROM ucl_knockout_matches km WHERE km.match_record_id = mr.id)
       WHERE p.ucl_group_id IS NOT NULL
-      GROUP BY p.id, p.name, p.ucl_group_id, t.name, t.logo_url, p.avatar_id, p.avatar_url
+      GROUP BY p.id, p.name, p.ucl_group_id, t.name, p.avatar_id
     `, [currentSeason])
 
     const groups = groupsRes.rows.map(g => {

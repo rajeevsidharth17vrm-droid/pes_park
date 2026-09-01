@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Trophy, CheckCircle, Clock, Trash2 } from "lucide-react"
-import { useQuickTournament, useSaveQuickTournamentResult, useResetQuickTournament, useUpdateMatchPlayers, usePlayers } from "../lib/queries"
+import { useQuery } from "@tanstack/react-query"
+import { useQuickTournament, useSaveQuickTournamentResult, useResetQuickTournament, useUpdateQuickMatchPlayers } from "../lib/queries"
 import { cn } from "../lib/utils"
 import Confetti from "../components/common/Confetti"
 import { TeamLogoIcon } from "../components/common/TeamLogo"
@@ -19,9 +20,9 @@ function getRoundLabel(round, totalRounds) {
   return `Round ${round}`
 }
 
-function MatchRow({ match, totalRounds, tournamentId, allPlayers, onSaved }) {
+function MatchRow({ match, totalRounds, tournamentId, allPlayers, onSaved, onEditPlayers }) {
   const saveResult    = useSaveQuickTournamentResult()
-  const updatePlayers = useUpdateMatchPlayers()
+  const updatePlayers = useUpdateQuickMatchPlayers()
   const [score1, setScore1] = useState("")
   const [score2, setScore2] = useState("")
   const [tieWinner, setTieWinner] = useState("")
@@ -113,6 +114,7 @@ function MatchRow({ match, totalRounds, tournamentId, allPlayers, onSaved }) {
             onClick={() => {
               setP1Id(match.player1_id ? String(match.player1_id) : "")
               setP2Id(match.player2_id ? String(match.player2_id) : "")
+              onEditPlayers?.()
               setEditingPlayers(true)
             }}
             className="text-xs text-slate-500 hover:text-accent transition-colors">
@@ -233,7 +235,15 @@ export default function WeeklyBracket() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data: tournament, refetch } = useQuickTournament(id)
-  const { data: rosterPlayersRaw = [] } = usePlayers()
+  // Only fetch all players once the user first opens "Edit players" — avoids
+  // loading 169 players upfront just for a dropdown that may never be used.
+  const [playersNeeded, setPlayersNeeded] = useState(false)
+  const { data: rosterPlayersRaw = [] } = useQuery({
+    queryKey: ["players", {}],
+    queryFn: () => import("../lib/api").then(m => m.playersApi.list()),
+    enabled: playersNeeded,
+    staleTime: 60000,
+  })
   const rosterPlayers = [...rosterPlayersRaw].sort((a, b) => a.name.localeCompare(b.name))
   const resetTournament = useResetQuickTournament()
   const [confirmReset, setConfirmReset] = useState(false)
@@ -255,7 +265,7 @@ export default function WeeklyBracket() {
     <div className="min-h-screen bg-pitch-900 p-4 md:p-6">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/admin?tab=weekly")}
+          <button onClick={() => navigate("/admin?tab=quick")}
             className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
             <ArrowLeft className="w-4 h-4" /> Admin
           </button>
@@ -284,7 +294,7 @@ export default function WeeklyBracket() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-rose-400">Delete all fixtures?</span>
               <button onClick={() => setConfirmReset(false)} className="text-xs px-3 py-1.5 rounded-lg border border-surface-border text-slate-400">Cancel</button>
-              <button onClick={async () => { await resetTournament.mutateAsync(id); navigate("/admin?tab=weekly") }}
+              <button onClick={async () => { await resetTournament.mutateAsync(id); navigate("/admin?tab=quick") }}
                 disabled={resetTournament.isPending}
                 className="text-xs px-3 py-1.5 rounded-lg bg-rose-500 text-white font-semibold">
                 {resetTournament.isPending ? "Deleting…" : "Yes, Delete"}
@@ -327,6 +337,7 @@ export default function WeeklyBracket() {
                 tournamentId={parseInt(id)}
                 allPlayers={rosterPlayers}
                 onSaved={refetch}
+                onEditPlayers={() => setPlayersNeeded(true)}
               />
             ))}
           </div>

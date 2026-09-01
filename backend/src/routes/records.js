@@ -521,6 +521,7 @@ router.delete("/:id", authenticate, adminOnly, async (req, res, next) => {
     await query(`UPDATE ucl_fixtures SET match_record_id = NULL, status = 'pending', player1_score = NULL, player2_score = NULL WHERE match_record_id = $1`, [mrId])
     await query(`UPDATE ucl_knockout_matches SET match_record_id = NULL, status = 'pending', winner_id = NULL, player1_score = NULL, player2_score = NULL WHERE match_record_id = $1`, [mrId])
     await query(`UPDATE weekly_tournament_matches SET match_record_id = NULL, status = 'pending', winner_id = NULL, player1_score = NULL, player2_score = NULL WHERE match_record_id = $1`, [mrId])
+    await query(`UPDATE quick_tournament_matches SET match_record_id = NULL, status = 'pending', winner_id = NULL, player1_score = NULL, player2_score = NULL WHERE match_record_id = $1`, [mrId])
 
     // Fetch old values before deleting so we can reverse BDR deltas
     const oldRec = await query(
