@@ -12,7 +12,7 @@ import { usePlayers } from "../../lib/queries"
 import { uclApi } from "../../lib/api"
 import { cn } from "../../lib/utils"
 
-// Auto-generate form: select players → auto-create 8 groups
+// Auto-generate form: select players → auto-create 4 groups
 function GenerateForm({ onClose }) {
   const navigate = useNavigate()
   const { data: allPlayers = [] } = usePlayers()
@@ -28,20 +28,22 @@ function GenerateForm({ onClose }) {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
-  const perGroup   = Math.floor(selected.length / 8)
-  const remainder  = selected.length % 8
+  const GROUP_COUNT  = 4
+  const perGroup     = Math.floor(selected.length / GROUP_COUNT)
+  const remainder    = selected.length % GROUP_COUNT
+  const canGenerate  = selected.length >= GROUP_COUNT
 
   async function handleGenerate() {
-    if (selected.length < 1) return
+    if (!canGenerate) return
     await generateGroups.mutateAsync(selected)
-    onClose() // return to admin list — View Draw button will appear
+    onClose()
   }
 
   return (
     <div className="card p-5 space-y-4 mb-5">
       <div className="flex items-center gap-2">
         <Zap className="w-4 h-4 text-accent" />
-        <h3 className="text-sm font-semibold text-white">Auto-Generate 8 Groups</h3>
+        <h3 className="text-sm font-semibold text-white">Auto-Generate 4 Groups</h3>
       </div>
 
       <div>
@@ -49,7 +51,10 @@ function GenerateForm({ onClose }) {
           Select players — {selected.length} selected
           {selected.length > 0 && (
             <span className="ml-2 text-accent">
-              → {perGroup} per group{remainder > 0 ? `, first ${remainder} group${remainder > 1 ? "s" : ""} get 1 extra` : ""}
+              {remainder === 0
+                ? `→ ${perGroup} per group (equal)`
+                : `→ ${perGroup + 1} players in first ${remainder} group${remainder > 1 ? "s" : ""}, ${perGroup} in the rest`
+              }
             </span>
           )}
         </p>
@@ -91,9 +96,9 @@ function GenerateForm({ onClose }) {
       <div className="flex gap-3">
         <button onClick={onClose} className="px-4 py-2 rounded-lg border border-surface-border text-slate-400 text-sm">Cancel</button>
         <button onClick={handleGenerate}
-          disabled={selected.length < 1 || generateGroups.isPending}
+          disabled={!canGenerate || generateGroups.isPending}
           className="flex-1 px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-40">
-          {generateGroups.isPending ? "Generating…" : `Generate 8 Groups (${selected.length} players)`}
+          {generateGroups.isPending ? "Generating…" : `Generate 4 Groups (${selected.length} players)`}
         </button>
       </div>
     </div>
@@ -317,7 +322,7 @@ export default function UclGroupsAdmin() {
         <div className="card px-5 py-10 text-center">
           <Users className="w-8 h-8 text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No UCL groups yet</p>
-          <p className="text-slate-600 text-xs mt-1">Use Auto-generate to create 8 groups instantly, or add manually</p>
+          <p className="text-slate-600 text-xs mt-1">Use Auto-generate to create 4 groups instantly, or add manually</p>
         </div>
       ) : activeGroups.length > 0 ? (
         <div className="space-y-3">

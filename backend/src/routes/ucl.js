@@ -19,8 +19,8 @@ router.post("/generate", authenticate, adminOnly, async (req, res, next) => {
       playerIds: z.array(z.number().int().positive()).min(1)
     }).parse(req.body)
 
-    const GROUP_COUNT = 8
-    const GROUP_NAMES = ["Group A","Group B","Group C","Group D","Group E","Group F","Group G","Group H"]
+    const GROUP_COUNT = 4
+    const GROUP_NAMES = ["Group A","Group B","Group C","Group D"]
 
     // Shuffle players randomly
     const shuffled = [...playerIds].sort(() => Math.random() - 0.5)
