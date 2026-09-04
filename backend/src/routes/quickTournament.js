@@ -457,11 +457,6 @@ router.patch("/matches/:matchId/result", authenticate, adminOnly, async (req, re
       // (the tournament's own last round) specifically.
       // Note: Quick Tournament does not award BDR — only League Playoff,
       // Weekly, and UCL Knockout give BDR in the current system.
-      const finalMatchRes = await query(
-        "SELECT winner_id FROM quick_tournament_matches WHERE tournament_id = $1 AND round = $2 AND status = 'completed'",
-        [match.tournament_id, totalRounds]
-      )
-
     }
 
     res.json({ updated: true, winnerId, nextRound: match.round + 1 })

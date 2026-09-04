@@ -474,37 +474,47 @@ router.delete("/players/:playerId/group", authenticate, adminOnly, async (req, r
 })
 
 // GET /api/ucl/standings — computed group-stage standings (public)
+// Joins through ucl_fixtures so standings are scoped to the player's CURRENT
+// group setup. Old-season data can never bleed through because ucl_fixtures are
+// deleted and recreated fresh every time groups are regenerated, making the
+// group structure itself the season boundary (no season_number filter needed).
 router.get("/standings", async (req, res, next) => {
   try {
     const groupsRes = await query("SELECT * FROM ucl_groups WHERE status = 'active' ORDER BY name ASC")
-
-    const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const currentSeason = parseInt(seasonRes.rows[0]?.value || "1")
 
     const statsRes = await query(`
       SELECT
         p.id, p.name, p.ucl_group_id AS "groupId", t.name AS team,
         p.avatar_id AS "avatarId",
-        COUNT(mr.id) AS played,
-        SUM(CASE
-          WHEN (mr.player_id = p.id AND mr.result = 'win') OR (mr.opponent_id = p.id AND mr.result = 'loss') THEN 1 ELSE 0
-        END) AS won,
-        SUM(CASE WHEN mr.result = 'draw' THEN 1 ELSE 0 END) AS drawn,
-        SUM(CASE
-          WHEN (mr.player_id = p.id AND mr.result = 'loss') OR (mr.opponent_id = p.id AND mr.result = 'win') THEN 1 ELSE 0
-        END) AS lost,
-        SUM(CASE WHEN mr.player_id = p.id THEN COALESCE(mr.player_score,0) ELSE COALESCE(mr.opponent_score,0) END) AS gf,
-        SUM(CASE WHEN mr.player_id = p.id THEN COALESCE(mr.opponent_score,0) ELSE COALESCE(mr.player_score,0) END) AS ga
+        COUNT(uf.id) FILTER (WHERE uf.status = 'completed') AS played,
+        COUNT(uf.id) FILTER (WHERE uf.status = 'completed' AND (
+          (uf.player1_id = p.id AND mr.result = 'win') OR
+          (uf.player2_id = p.id AND mr.result = 'loss')
+        )) AS won,
+        COUNT(uf.id) FILTER (WHERE uf.status = 'completed' AND mr.result = 'draw') AS drawn,
+        COUNT(uf.id) FILTER (WHERE uf.status = 'completed' AND (
+          (uf.player1_id = p.id AND mr.result = 'loss') OR
+          (uf.player2_id = p.id AND mr.result = 'win')
+        )) AS lost,
+        COALESCE(SUM(CASE
+          WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player1_score, 0)
+          WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player2_score, 0)
+          ELSE 0
+        END), 0) AS gf,
+        COALESCE(SUM(CASE
+          WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player2_score, 0)
+          WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player1_score, 0)
+          ELSE 0
+        END), 0) AS ga
       FROM players p
       LEFT JOIN teams t ON p.team_id = t.id
-      LEFT JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id)
-        AND mr.match_type = 'ucl'
-        AND mr.season_number = $1
-        AND NOT EXISTS (SELECT 1 FROM ucl_knockout_matches km WHERE km.match_record_id = mr.id)
+      LEFT JOIN ucl_fixtures uf
+        ON uf.group_id = p.ucl_group_id
+        AND (uf.player1_id = p.id OR uf.player2_id = p.id)
+      LEFT JOIN match_records mr ON mr.id = uf.match_record_id
       WHERE p.ucl_group_id IS NOT NULL
       GROUP BY p.id, p.name, p.ucl_group_id, t.name, p.avatar_id
-    `, [currentSeason])
+    `)
 
     const groups = groupsRes.rows.map(g => {
       const players = statsRes.rows
@@ -534,10 +544,10 @@ router.get("/standings", async (req, res, next) => {
 })
 
 // GET /api/ucl/top-scorers — top 10 players by goals in UCL group stage (public)
+// Reads scores from ucl_fixtures directly so it stays scoped to the current
+// season's group setup without needing a season_number filter.
 router.get("/top-scorers", async (req, res, next) => {
   try {
-    const seasonRes = await query("SELECT value FROM app_settings WHERE key = 'current_season'")
-    const season = parseInt(seasonRes.rows[0]?.value || "1")
     const result = await query(`
       SELECT
         p.id,
@@ -549,30 +559,30 @@ router.get("/top-scorers", async (req, res, next) => {
         g.name AS "groupName",
         COALESCE(SUM(
           CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.player_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.opponent_score, 0)
+            WHEN uf.player1_id = p.id THEN COALESCE(uf.player1_score, 0)
+            WHEN uf.player2_id = p.id THEN COALESCE(uf.player2_score, 0)
             ELSE 0
           END
         ), 0) AS goals,
         COALESCE(SUM(
           CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.opponent_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.player_score, 0)
+            WHEN uf.player1_id = p.id THEN COALESCE(uf.player2_score, 0)
+            WHEN uf.player2_id = p.id THEN COALESCE(uf.player1_score, 0)
             ELSE 0
           END
         ), 0) AS conceded
       FROM players p
-      LEFT JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id)
-        AND mr.match_type = 'ucl'
-        AND mr.season_number = $1
       LEFT JOIN teams t      ON p.team_id      = t.id
-      LEFT JOIN ucl_groups g ON p.ucl_group_id = g.id
+      LEFT JOIN ucl_groups g ON p.ucl_group_id = g.id AND g.status = 'active'
+      LEFT JOIN ucl_fixtures uf
+        ON uf.group_id = p.ucl_group_id
+        AND (uf.player1_id = p.id OR uf.player2_id = p.id)
+        AND uf.status = 'completed'
       WHERE p.ucl_group_id IS NOT NULL AND g.status = 'active'
       GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url, g.name
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
-    `, [season])
+    `)
     res.json(result.rows)
   } catch (err) { next(err) }
 })

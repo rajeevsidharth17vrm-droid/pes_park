@@ -194,7 +194,7 @@ router.post("/team", authenticate, async (req, res, next) => {
       VALUES ($1,$2,$3,$4,'league',$5,$6,$7,$8,$9,$10,$11)
       RETURNING *
     `, [
-      playerId, opponentId, result, 'C',
+      playerId, opponentId, result, oppCheck.rows[0].grade,
       playerScore ?? null, opponentScore ?? null,
       new Date().toISOString().slice(0, 10),
       req.user.id, seasonNumber, fixtureId,
@@ -374,10 +374,10 @@ router.post("/playoff", authenticate, adminOnly, async (req, res, next) => {
       INSERT INTO match_records
         (player_id, opponent_id, result, opponent_grade, match_type, player_score, opponent_score,
          recorded_at, recorded_by, season_number, fixture_id, team_id)
-      VALUES ($1,$2,$3,'C','playoff',$4,$5,$6,$7,$8,$9,$10)
+      VALUES ($1,$2,$3,$4,'playoff',$5,$6,$7,$8,$9,$10,$11)
       RETURNING *
     `, [
-      playerId, opponentId, result, playerScore ?? null, opponentScore ?? null,
+      playerId, opponentId, result, p2.rows[0].grade, playerScore ?? null, opponentScore ?? null,
       new Date().toISOString().slice(0, 10),
       req.user.id, seasonNumber,
       playoffMatchId,          // stored in fixture_id for linking
@@ -410,7 +410,7 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
 
     const oppRes = await query("SELECT grade FROM players WHERE id = $1", [opponentId])
     if (!oppRes.rows[0]) return res.status(404).json({ error: "Opponent not found" })
-    const opponentGrade = 'C'
+    const opponentGrade = oppRes.rows[0].grade
 
     const seasonNumber = await getCurrentSeason()
     const ins = await query(`
@@ -483,11 +483,7 @@ router.patch("/:id", authenticate, adminOnly, async (req, res, next) => {
     // Apply new BDR deltas
     await applyMatchDeltas(playerId, opponentId, result, playerScore, opponentScore)
 
-    // Rebuild form and MV for both players since result may have changed
-    const letter    = result === "win" ? "W" : result === "draw" ? "D" : "L"
-    const oppLetter = result === "win" ? "L" : result === "loss" ? "W" : "D"
-    await query(`UPDATE players SET form = (SELECT ARRAY(SELECT unnest(ARRAY[$1::char(1)] || form) LIMIT 5)) WHERE id = $2`, [letter, playerId])
-    await query(`UPDATE players SET form = (SELECT ARRAY(SELECT unnest(ARRAY[$1::char(1)] || form) LIMIT 5)) WHERE id = $2`, [oppLetter, opponentId])
+    // recalcForm fully rebuilds form from DB for both players
     let recalcError = null
     try {
       await recalcMarketValue(playerId)

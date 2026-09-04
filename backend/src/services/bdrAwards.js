@@ -141,14 +141,22 @@ export async function awardWeeklyTournamentBdr(tournamentId) {
     // depth >= 3: R16 or earlier — no BDR
   }
 
-  // Golden boot — player with the most goals across all matches in this tournament
+  // Golden boot — player with the most goals across all matches in this tournament.
+  // Each match_record stores player1 goals in player_score and player2 goals in
+  // opponent_score, so we must UNION both sides to count every goal correctly.
   const gb = await query(`
-    SELECT mr.player_id, SUM(mr.player_score) AS goals
-    FROM match_records mr
-    JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.id
-    WHERE wtm.tournament_id = $1
-      AND mr.player_score IS NOT NULL AND mr.player_score > 0
-    GROUP BY mr.player_id
+    SELECT player_id, SUM(goals) AS goals FROM (
+      SELECT mr.player_id, COALESCE(mr.player_score, 0) AS goals
+      FROM match_records mr
+      JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.id
+      WHERE wtm.tournament_id = $1 AND mr.player_score IS NOT NULL AND mr.player_score > 0
+      UNION ALL
+      SELECT mr.opponent_id AS player_id, COALESCE(mr.opponent_score, 0) AS goals
+      FROM match_records mr
+      JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.id
+      WHERE wtm.tournament_id = $1 AND mr.opponent_score IS NOT NULL AND mr.opponent_score > 0
+    ) sub
+    GROUP BY player_id
     ORDER BY goals DESC
     LIMIT 1
   `, [tournamentId])
@@ -190,14 +198,21 @@ export async function awardUclKnockoutBdr(tournamentId, totalRounds) {
     }
   }
 
-  // Golden boot
+  // Golden boot — both player1 and player2 goals must be counted.
+  // player_score = player1 goals, opponent_score = player2 goals.
   const gb = await query(`
-    SELECT mr.player_id, SUM(mr.player_score) AS goals
-    FROM match_records mr
-    JOIN ucl_knockout_matches ukm ON ukm.match_record_id = mr.id
-    WHERE ukm.tournament_id = $1
-      AND mr.player_score IS NOT NULL AND mr.player_score > 0
-    GROUP BY mr.player_id
+    SELECT player_id, SUM(goals) AS goals FROM (
+      SELECT mr.player_id, COALESCE(mr.player_score, 0) AS goals
+      FROM match_records mr
+      JOIN ucl_knockout_matches ukm ON ukm.match_record_id = mr.id
+      WHERE ukm.tournament_id = $1 AND mr.player_score IS NOT NULL AND mr.player_score > 0
+      UNION ALL
+      SELECT mr.opponent_id AS player_id, COALESCE(mr.opponent_score, 0) AS goals
+      FROM match_records mr
+      JOIN ucl_knockout_matches ukm ON ukm.match_record_id = mr.id
+      WHERE ukm.tournament_id = $1 AND mr.opponent_score IS NOT NULL AND mr.opponent_score > 0
+    ) sub
+    GROUP BY player_id
     ORDER BY goals DESC
     LIMIT 1
   `, [tournamentId])

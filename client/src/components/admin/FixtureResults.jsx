@@ -435,13 +435,29 @@ function FixtureCard({ fixture }) {
       </div>
 
       {!saved ? (
-        <button onClick={handleSaveResult} disabled={!canSave || saveResult.isPending}
-          className={cn(
-            "mt-4 w-full py-2 rounded-lg text-sm font-semibold transition-all",
-            canSave ? "bg-accent hover:bg-accent-dim text-white" : "bg-surface-border text-slate-600 cursor-not-allowed"
-          )}>
-          {saveResult.isPending ? "Saving…" : "Save result"}
-        </button>
+        <div className="mt-4 flex items-center gap-2">
+          {isCompleted && (
+            <button
+              onClick={() => {
+                setHs(fixture.homeScore ?? "")
+                setAs(fixture.awayScore ?? "")
+                setHg(fixture.homeGoals ?? "")
+                setAg(fixture.awayGoals ?? "")
+                setSaved(true)
+              }}
+              className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg border border-surface-border text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-3 h-3" /> Cancel
+            </button>
+          )}
+          <button onClick={handleSaveResult} disabled={!canSave || saveResult.isPending}
+            className={cn(
+              "flex-1 py-2 rounded-lg text-sm font-semibold transition-all",
+              canSave ? "bg-accent hover:bg-accent-dim text-white" : "bg-surface-border text-slate-600 cursor-not-allowed"
+            )}>
+            {saveResult.isPending ? "Saving…" : "Save result"}
+          </button>
+        </div>
       ) : (
         <div className="mt-4 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs text-slate-600">
