@@ -21,6 +21,7 @@ import CountUp from "../components/common/CountUp"
 import ChampionCelebration from "../components/common/ChampionCelebration"
 import weeklyTrophyLogo from "../../images/Weekly.png"
 import uclTrophyLogo from "../../images/ucl.png"
+import qtTrophyLogo  from "../../images/qt.png"
 import goldenBootLogo from "../../images/Golden Boot.png"
 import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs } from "../lib/queries"
 
@@ -578,6 +579,17 @@ export default function CommonDashboard() {
           bgImage={displayUclChampionAvatar.bg}
         >
           {uclGoldenBoot && <GoldenBootBadge scorer={uclGoldenBoot} />}
+        </ChampionCelebration>
+      ) : showQuickCelebration && displayQuickChampion ? (
+        <ChampionCelebration
+          trophyImage={qtTrophyLogo}
+          eyebrow="QT"
+          title={displayQuickChampion}
+          subtitle="is the QT Champion! 🏆"
+          badgeImage={displayQuickChampionAvatar.thumb}
+          bgImage={displayQuickChampionAvatar.bg}
+        >
+          {quickGoldenBoot && <GoldenBootBadge scorer={quickGoldenBoot} />}
         </ChampionCelebration>
       ) : null}
 
