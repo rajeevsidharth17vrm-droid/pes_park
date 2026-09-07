@@ -120,29 +120,29 @@ router.get("/public/top-scorers", async (req, res, next) => {
         p.avatar_id AS "avatarId",
         COALESCE(SUM(
           CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.player_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.opponent_score, 0)
+            WHEN qtm.player1_id = p.id THEN COALESCE(qtm.player1_score, 0)
+            WHEN qtm.player2_id = p.id THEN COALESCE(qtm.player2_score, 0)
             ELSE 0
           END
         ), 0) AS goals,
         COALESCE(SUM(
           CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.opponent_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.player_score, 0)
+            WHEN qtm.player1_id = p.id THEN COALESCE(qtm.player2_score, 0)
+            WHEN qtm.player2_id = p.id THEN COALESCE(qtm.player1_score, 0)
             ELSE 0
           END
         ), 0) AS conceded
       FROM players p
       JOIN quick_tournament_players qtp ON qtp.player_id = p.id AND qtp.tournament_id = $1
-      JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id)
-        AND mr.match_type = 'quick'
-        AND mr.season_number = $2
+      JOIN quick_tournament_matches qtm
+        ON qtm.tournament_id = $1
+        AND (qtm.player1_id = p.id OR qtm.player2_id = p.id)
+        AND qtm.status = 'completed'
       LEFT JOIN teams t ON p.team_id = t.id
       GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
-    `, [t.rows[0].id, season])
+    `, [t.rows[0].id])
     res.json(result.rows)
   } catch (err) { next(err) }
 })
