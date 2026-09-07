@@ -109,6 +109,7 @@ function SeasonDetail({ record }) {
 export default function HallOfFame() {
   const navigate = useNavigate()
   const { data: records = [], isLoading } = useSeasonRecords()
+  const { data: infos = [] } = useLeagueInfo()
   const [openId, setOpenId] = useState(null)
 
   if (isLoading) return <Layout><Loading /></Layout>
@@ -128,6 +129,18 @@ export default function HallOfFame() {
             <p className="text-sm text-slate-500">Season records and award winners</p>
           </div>
         </div>
+
+        {/* League Info Board entries */}
+        {infos.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {infos.map(info => (
+              <div key={info.id} className="card px-5 py-4">
+                <p className="text-xs font-semibold text-accent uppercase tracking-widest mb-1">{info.title}</p>
+                <p className="text-sm text-slate-300 whitespace-pre-line">{info.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {records.length === 0 && (
           <div className="text-center py-12">
