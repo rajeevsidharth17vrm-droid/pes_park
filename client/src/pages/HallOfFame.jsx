@@ -5,7 +5,23 @@ import Layout from "../components/layout/Layout"
 import Loading from "../components/common/Loading"
 import { useSeasonRecords, useLeagueInfo } from "../lib/queries"
 import { cn } from "../lib/utils"
-import teamLeagueImg from "../../images/Auction Tour.png"
+import teamLeagueImg  from "../../images/Auction Tour.png"
+import uclImg        from "../../images/ucl.png"
+import ballondorImg  from "../../images/ballondor.png"
+import goldenBootImg from "../../images/Golden Boot.png"
+import weeklyImg     from "../../images/Weekly.png"
+import qtImg         from "../../images/qt.png"
+
+function getTrophyIcon(title) {
+  const t = title?.toLowerCase() || ""
+  if (t.includes("solo tour"))    return uclImg
+  if (t.includes("ballon"))       return ballondorImg
+  if (t.includes("golden boot"))  return goldenBootImg
+  if (t.includes("weekly"))       return weeklyImg
+  if (t.includes("quick"))        return qtImg
+  if (t.includes("auction"))      return teamLeagueImg
+  return null
+}
 
 function parseCustomAwards(record) {
   if (record.custom_awards && Array.isArray(record.custom_awards) && record.custom_awards.length > 0) {
@@ -40,7 +56,10 @@ function SeasonDetail({ record }) {
             {awards.filter(a => a.title && a.winner).map((a, i) => (
               <div key={i} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
-                  <Trophy className="w-4 h-4 text-gold flex-shrink-0" />
+                  {getTrophyIcon(a.title)
+                    ? <img src={getTrophyIcon(a.title)} alt={a.title} className="w-6 h-6 object-contain flex-shrink-0" />
+                    : <Trophy className="w-4 h-4 text-gold flex-shrink-0" />
+                  }
                   <p className="text-xs text-slate-500">{a.title}</p>
                 </div>
                 <div className="text-right">
