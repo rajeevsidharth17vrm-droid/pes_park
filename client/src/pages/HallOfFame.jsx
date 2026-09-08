@@ -17,7 +17,7 @@ function getTrophyIcon(title) {
   if (t.includes("solo tour"))    return uclImg
   if (t.includes("ballon"))       return ballondorImg
   if (t.includes("golden boot"))  return goldenBootImg
-  if (t.includes("weekly"))       return weeklyImg
+  if (t.includes("weekly") || t.includes("weekend")) return weeklyImg
   if (t.includes("quick"))        return qtImg
   if (t.includes("auction"))      return teamLeagueImg
   return null
