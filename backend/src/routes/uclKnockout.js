@@ -36,24 +36,37 @@ router.get("/public/current", async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// Helper: get top 4 from each active UCL group by standings
+// Helper: get top 4 from each active UCL group by standings.
+// Joins through ucl_fixtures so only current-season group matches count.
 async function getGroupStandings() {
   const result = await query(`
     SELECT
       p.id, p.name, p.ucl_group_id AS "groupId",
       g.name AS "groupName",
       COALESCE(SUM(CASE
-        WHEN (mr.player_id = p.id AND mr.result = 'win') OR (mr.opponent_id = p.id AND mr.result = 'loss') THEN 3
-        WHEN mr.result = 'draw' THEN 1
+        WHEN uf.status = 'completed' AND uf.player1_id = p.id AND mr.result = 'win'  THEN 3
+        WHEN uf.status = 'completed' AND uf.player2_id = p.id AND mr.result = 'loss' THEN 3
+        WHEN uf.status = 'completed' AND mr.result = 'draw' THEN 1
         ELSE 0 END), 0) AS points,
-      COALESCE(SUM(CASE WHEN mr.player_id = p.id THEN COALESCE(mr.player_score,0) ELSE COALESCE(mr.opponent_score,0) END)
-        - SUM(CASE WHEN mr.player_id = p.id THEN COALESCE(mr.opponent_score,0) ELSE COALESCE(mr.player_score,0) END), 0) AS gd,
-      COALESCE(SUM(CASE WHEN mr.player_id = p.id THEN COALESCE(mr.player_score,0) ELSE COALESCE(mr.opponent_score,0) END), 0) AS gf
+      COALESCE(
+        SUM(CASE
+          WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player1_score,0)
+          WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player2_score,0)
+          ELSE 0 END)
+        - SUM(CASE
+          WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player2_score,0)
+          WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player1_score,0)
+          ELSE 0 END), 0) AS gd,
+      COALESCE(SUM(CASE
+        WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player1_score,0)
+        WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player2_score,0)
+        ELSE 0 END), 0) AS gf
     FROM players p
     JOIN ucl_groups g ON p.ucl_group_id = g.id AND g.status = 'active'
-    LEFT JOIN match_records mr
-      ON (mr.player_id = p.id OR mr.opponent_id = p.id) AND mr.match_type = 'ucl'
-      AND NOT EXISTS (SELECT 1 FROM ucl_knockout_matches km WHERE km.match_record_id = mr.id)
+    LEFT JOIN ucl_fixtures uf
+      ON uf.group_id = p.ucl_group_id
+      AND (uf.player1_id = p.id OR uf.player2_id = p.id)
+    LEFT JOIN match_records mr ON mr.id = uf.match_record_id
     GROUP BY p.id, p.name, p.ucl_group_id, g.name
     ORDER BY g.name ASC, points DESC, gd DESC, gf DESC
   `)
