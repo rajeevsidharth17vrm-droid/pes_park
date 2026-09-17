@@ -157,10 +157,10 @@ export const useUclUnassigned = () =>
   useQuery({ queryKey: ["ucl-unassigned"], queryFn: uclApi.unassigned })
 
 export const useUclStandings = () =>
-  useQuery({ queryKey: ["ucl-standings"], queryFn: uclApi.standings, staleTime: 0 })
+  useQuery({ queryKey: ["ucl-standings"], queryFn: uclApi.standings })
 
 export const useUclFixtures = () =>
-  useQuery({ queryKey: ["ucl-fixtures"], queryFn: uclApi.fixtures, refetchOnMount: "always", staleTime: 0 })
+  useQuery({ queryKey: ["ucl-fixtures"], queryFn: uclApi.fixtures })
 
 export const useUclFixturesPublic = (groupId) =>
   useQuery({
@@ -310,7 +310,7 @@ export const useTopScorers = () =>
   useQuery({ queryKey: ["top-scorers"], queryFn: teamsApi.topScorers })
 
 export const useTeamLeaguePlayoffs = () =>
-  useQuery({ queryKey: ["team-league-playoffs"], queryFn: teamsApi.playoffsCurrent, staleTime: 0 })
+  useQuery({ queryKey: ["team-league-playoffs"], queryFn: teamsApi.playoffsCurrent })
 export const useGeneratePlayoffs = () => {
   const qc = useQueryClient()
   return useMutation({
@@ -460,7 +460,7 @@ export const useFixtureRecords = (fixtureId) =>
     queryKey: ["fixture-records", fixtureId],
     queryFn:  () => recordsApi.byFixture(fixtureId),
     enabled:  !!fixtureId,
-    refetchInterval: 30000, // poll every 30s so both teams (and admins) see each other's updates
+    refetchInterval: 300000, // poll every 5 min (was 30s — caused excessive bandwidth on free tier)
   })
 
 export const useEditTeamRecord = () => {
