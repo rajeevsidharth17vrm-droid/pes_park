@@ -501,7 +501,7 @@ export default function AdminPage() {
         {activeTab === "trades" && (
           <TradeApproval trades={pendingTrades} />
         )}
-        {isLoading && activeTab !== "setup" && activeTab !== "overview" && activeTab !== "trades" && (
+        {isLoading && activeTab !== "setup" && activeTab !== "overview" && activeTab !== "trades" && activeTab !== "fixtures" && (
           <Loading />
         )}
       </div>
