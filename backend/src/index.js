@@ -21,12 +21,24 @@ const app  = express()
 const PORT = process.env.PORT || 3001
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+// CORS_ORIGINS env var: comma-separated list of extra allowed origins.
+// The three below are always allowed regardless of env config.
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "https://pes-park-opal.vercel.app",
+  "https://pes-park-beta.vercel.app",
+  ...(process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",").map(o => o.trim()).filter(Boolean)
+    : []),
+]
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://pes-park-opal.vercel.app",
-    "https://pes-park-beta.vercel.app"
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true)
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS: origin '${origin}' not allowed`))
+  },
   credentials: true
 }))
 app.use(express.json({ limit: "15mb" }))
