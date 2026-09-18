@@ -14,13 +14,12 @@ const queryClient = new QueryClient({
       // On page load: show localStorage data instantly (no spinner).
       // On refresh: fetches fresh data → updates localStorage.
       gcTime: 1000 * 60 * 60 * 24,       // keep in localStorage for 24 hours
-      staleTime: 1000 * 60 * 60 * 24,    // treat as fresh for 24 hours
+      staleTime: 1000 * 60 * 5,          // data is fresh for 5 minutes
+      // After 5 mins, next mount/focus triggers background refetch
+      // Page refresh ALWAYS fetches fresh (staleTime resets on hard reload)
       retry: 0,                           // no retries — fail fast if server sleeping
-      retryOnMount: false,
       refetchOnWindowFocus: false,
       refetchOnMount: false,              // serve from localStorage on navigation
-      // If server doesn't respond in 15s, show error instead of infinite spinner
-      networkMode: "offlineFirst",        // use cache first, fetch in background
     },
   },
 })
