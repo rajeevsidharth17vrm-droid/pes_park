@@ -12,12 +12,15 @@ const queryClient = new QueryClient({
     queries: {
       // Cache is valid for 24 hours in localStorage.
       // On page load: show localStorage data instantly (no spinner).
-      // On refresh: staleTime has passed → fetches fresh data → updates localStorage.
+      // On refresh: fetches fresh data → updates localStorage.
       gcTime: 1000 * 60 * 60 * 24,       // keep in localStorage for 24 hours
-      staleTime: 1000 * 60 * 60 * 24,    // treat as fresh for 24 hours (refresh overrides)
-      retry: 1,
+      staleTime: 1000 * 60 * 60 * 24,    // treat as fresh for 24 hours
+      retry: 0,                           // no retries — fail fast if server sleeping
+      retryOnMount: false,
       refetchOnWindowFocus: false,
-      refetchOnMount: false,              // don't refetch on navigation between pages
+      refetchOnMount: false,              // serve from localStorage on navigation
+      // If server doesn't respond in 15s, show error instead of infinite spinner
+      networkMode: "offlineFirst",        // use cache first, fetch in background
     },
   },
 })
@@ -26,18 +29,15 @@ const queryClient = new QueryClient({
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
   key: "pes-park-cache",
-  throttleTime: 1000,                     // write to localStorage at most once per second
+  throttleTime: 1000,
 })
 
 persistQueryClient({
   queryClient,
   persister,
-  maxAge: 1000 * 60 * 60 * 24,           // discard cache older than 24 hours
+  maxAge: 1000 * 60 * 60 * 24,
   dehydrateOptions: {
-    shouldDehydrateQuery: (query) => {
-      // Persist everything that succeeded
-      return query.state.status === "success"
-    },
+    shouldDehydrateQuery: (query) => query.state.status === "success",
   },
 })
 
