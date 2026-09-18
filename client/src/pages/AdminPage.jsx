@@ -495,8 +495,8 @@ export default function AdminPage() {
         {activeTab === "quicktournament" && (
           <QuickTournamentAdmin />
         )}
-        {activeTab === "fixtures" && !isLoading && (
-          <FixtureResults fixtures={fixtures} />
+        {activeTab === "fixtures" && (
+          <FixtureResults />
         )}
         {activeTab === "trades" && (
           <TradeApproval trades={pendingTrades} />

@@ -3,7 +3,7 @@ import { Check, Lock, Pencil, Trash2, X, Save, Plus, Calendar, Download } from "
 import {
   useSaveFixtureResult, useUpdateFixture, useDeleteFixture,
   useCreateFixture, useTeams, useUpdateRoundDate,
-  useGenerateSeasonFixtures
+  useGenerateSeasonFixtures, useFixtures,
 } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 import { toPng } from "html-to-image"
@@ -594,7 +594,8 @@ function RoundDateEditor({ round, roundFixtures }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function FixtureResults({ fixtures }) {
+export default function FixtureResults() {
+  const { data: fixtures = [] } = useFixtures()
   const { data: teams = [] } = useTeams()
   const [activeRound, setActiveRound]     = useState("all")
   const [exporting, setExporting]         = useState(false)
