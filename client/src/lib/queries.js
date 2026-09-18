@@ -31,7 +31,7 @@ export const useCreateWeeklyTournament = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (name) => weeklyApi.create(name),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournaments"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["weekly-tournaments"] }),
   })
 }
 
@@ -40,8 +40,8 @@ export const useSetWeeklyPlayers = () => {
   return useMutation({
     mutationFn: ({ id, playerIds }) => weeklyApi.setPlayers(id, playerIds),
     onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournaments"] })       // refresh the list so status flips to "draw"
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournament", id] })    // refresh the detail too
+      qc.invalidateQueries({ queryKey: ["weekly-tournaments"] })       // refresh the list so status flips to "draw"
+      qc.invalidateQueries({ queryKey: ["weekly-tournament", id] })    // refresh the detail too
     },
   })
 }
@@ -53,8 +53,8 @@ export const useSaveWeeklyResult = () => {
       weeklyApi.saveResult(matchId, player1Score, player2Score, tieWinnerId),
     onSuccess: (_, { tournamentId }) => {
       // Invalidate with both string and number forms to be safe
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournament"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: ["weekly-tournament"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -63,7 +63,7 @@ export const useDeleteWeeklyTournament = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => weeklyApi.deleteTournament(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournaments"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["weekly-tournaments"] }),
   })
 }
 
@@ -71,7 +71,7 @@ export const useUpdateMatchPlayers = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ matchId, ...body }) => weeklyApi.updateMatchPlayers(matchId, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournament"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["weekly-tournament"] }),
   })
 }
 
@@ -80,8 +80,8 @@ export const useResetWeeklyTournament = () => {
   return useMutation({
     mutationFn: (id) => weeklyApi.reset(id),
     onSuccess: (_, id) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournaments"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["weekly-tournament", String(id)] })
+      qc.invalidateQueries({ queryKey: ["weekly-tournaments"] })
+      qc.invalidateQueries({ queryKey: ["weekly-tournament", String(id)] })
     },
   })
 }
@@ -96,7 +96,7 @@ export const useCreateQuickTournament = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (name) => quickTournamentApi.create(name),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournaments"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-tournaments"] }),
   })
 }
 
@@ -104,7 +104,7 @@ export const useSetQuickTournamentPlayers = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, playerIds }) => quickTournamentApi.setPlayers(id, playerIds),
-    onSuccess: (_, { id }) => qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournament", id] }),
+    onSuccess: (_, { id }) => qc.invalidateQueries({ queryKey: ["quick-tournament", id] }),
   })
 }
 
@@ -114,8 +114,8 @@ export const useSaveQuickTournamentResult = () => {
     mutationFn: ({ matchId, player1Score, player2Score, tieWinnerId }) =>
       quickTournamentApi.saveResult(matchId, player1Score, player2Score, tieWinnerId),
     onSuccess: (_, { tournamentId }) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournament"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: ["quick-tournament"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -124,7 +124,7 @@ export const useDeleteQuickTournament = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => quickTournamentApi.deleteTournament(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournaments"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-tournaments"] }),
   })
 }
 
@@ -132,7 +132,7 @@ export const useUpdateQuickMatchPlayers = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ matchId, ...body }) => quickTournamentApi.updateMatchPlayers(matchId, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournament"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-tournament"] }),
   })
 }
 
@@ -141,8 +141,8 @@ export const useResetQuickTournament = () => {
   return useMutation({
     mutationFn: (id) => quickTournamentApi.reset(id),
     onSuccess: (_, id) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournaments"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["quick-tournament", String(id)] })
+      qc.invalidateQueries({ queryKey: ["quick-tournaments"] })
+      qc.invalidateQueries({ queryKey: ["quick-tournament", String(id)] })
     },
   })
 }
@@ -186,7 +186,7 @@ export const useCreateUclGroup = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (name) => uclApi.createGroup(name),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-groups"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-groups"] }),
   })
 }
 
@@ -195,10 +195,10 @@ export const useGenerateUclGroups = () => {
   return useMutation({
     mutationFn: (playerIds) => uclApi.generate(playerIds),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-groups"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-admin-groups"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-unassigned"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-standings"] })
+      qc.invalidateQueries({ queryKey: ["ucl-groups"] })
+      qc.invalidateQueries({ queryKey: ["ucl-admin-groups"] })
+      qc.invalidateQueries({ queryKey: ["ucl-unassigned"] })
+      qc.invalidateQueries({ queryKey: ["ucl-standings"] })
     },
   })
 }
@@ -207,14 +207,14 @@ export const useResetGroupFixtures = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => uclApi.resetGroupFixtures(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-standings"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-standings"] }),
   })
 }
 export const useRenameUclGroup = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, name }) => uclApi.renameGroup(id, name),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-groups"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-groups"] }),
   })
 }
 export const useDeleteUclGroup = () => {
@@ -236,8 +236,8 @@ export const useAssignUclPlayer = () => {
   return useMutation({
     mutationFn: ({ groupId, playerId }) => uclApi.assignPlayer(groupId, playerId),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-groups"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-unassigned"] })
+      qc.invalidateQueries({ queryKey: ["ucl-groups"] })
+      qc.invalidateQueries({ queryKey: ["ucl-unassigned"] })
     },
   })
 }
@@ -246,9 +246,9 @@ export const useUnassignUclPlayer = () => {
   return useMutation({
     mutationFn: (playerId) => uclApi.unassignPlayer(playerId),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-groups"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-unassigned"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-standings"] })
+      qc.invalidateQueries({ queryKey: ["ucl-groups"] })
+      qc.invalidateQueries({ queryKey: ["ucl-unassigned"] })
+      qc.invalidateQueries({ queryKey: ["ucl-standings"] })
     },
   })
 }
@@ -260,21 +260,21 @@ export const useCreateLeagueInfo = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: leagueInfoApi.create,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["league-info"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["league-info"] }),
   })
 }
 export const useUpdateLeagueInfo = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...body }) => leagueInfoApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["league-info"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["league-info"] }),
   })
 }
 export const useDeleteLeagueInfo = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => leagueInfoApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["league-info"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["league-info"] }),
   })
 }
 
@@ -315,7 +315,7 @@ export const useGeneratePlayoffs = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: teamsApi.playoffsGenerate,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["team-league-playoffs"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-league-playoffs"] }),
   })
 }
 
@@ -323,7 +323,7 @@ export const useResetPlayoffs = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: teamsApi.playoffsReset,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["team-league-playoffs"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-league-playoffs"] }),
   })
 }
 
@@ -340,8 +340,8 @@ export const useLogPlayoffRecord = () => {
   return useMutation({
     mutationFn: (body) => teamsApi.playoffRecordLog(body),
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["playoff-records", vars.playoffMatchId] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: ["playoff-records", vars.playoffMatchId] })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -351,7 +351,7 @@ export const usePlayoffResult = () => {
   return useMutation({
     mutationFn: ({ id, team1Score, team2Score }) =>
       teamsApi.playoffsResult(id, { team1Score, team2Score }),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["team-league-playoffs"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-league-playoffs"] }),
   })
 }
 
@@ -372,7 +372,7 @@ export const useCreateSeasonRecord = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body) => teamsApi.createSeasonRecord(body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["season-records"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["season-records"] }),
   })
 }
 
@@ -380,7 +380,7 @@ export const useUpdateSeasonRecord = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...body }) => teamsApi.updateSeasonRecord(id, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["season-records"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["season-records"] }),
   })
 }
 
@@ -388,7 +388,7 @@ export const useDeleteSeasonRecord = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => teamsApi.deleteSeasonRecord(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["season-records"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["season-records"] }),
   })
 }
 
@@ -413,7 +413,7 @@ export const useUpdatePlayer = () => {
   return useMutation({
     mutationFn: ({ id, ...body }) => playersApi.update(id, body),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -423,8 +423,8 @@ export const useSetPlayerAvatar = () => {
   return useMutation({
     mutationFn: ({ id, ...body }) => playersApi.setAvatar(id, body),
     onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.player(id) })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.player(id) })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -437,8 +437,8 @@ export const useLogRecord = () => {
   return useMutation({
     mutationFn: recordsApi.create,
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.records })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.records })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -448,9 +448,9 @@ export const useLogTeamRecord = () => {
   return useMutation({
     mutationFn: recordsApi.createTeam,
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.records })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["fixture-records"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.records })
+      qc.invalidateQueries({ queryKey: ["fixture-records"] })
     },
   })
 }
@@ -468,9 +468,9 @@ export const useEditTeamRecord = () => {
   return useMutation({
     mutationFn: ({ id, ...body }) => recordsApi.updateTeam(id, body),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["fixture-records"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.records })
+      qc.invalidateQueries({ queryKey: ["fixture-records"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.records })
     },
   })
 }
@@ -480,9 +480,9 @@ export const useDeleteTeamRecord = () => {
   return useMutation({
     mutationFn: (id) => recordsApi.deleteTeam(id),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["fixture-records"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.records })
+      qc.invalidateQueries({ queryKey: ["fixture-records"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.records })
     },
   })
 }
@@ -492,8 +492,8 @@ export const useEditRecord = () => {
   return useMutation({
     mutationFn: ({ id, ...body }) => recordsApi.update(id, body),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.records })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.records })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -503,8 +503,8 @@ export const useDeleteRecord = () => {
   return useMutation({
     mutationFn: recordsApi.delete,
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.records })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.records })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -519,7 +519,7 @@ export const useCreateFixture = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fixturesApi.create,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["fixtures"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fixtures"] }),
   })
 }
 
@@ -527,7 +527,7 @@ export const useGenerateSeasonFixtures = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fixturesApi.generateSeason,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["fixtures"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fixtures"] }),
   })
 }
 
@@ -535,7 +535,7 @@ export const useUpdateFixture = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...body }) => fixturesApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["fixtures"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fixtures"] }),
   })
 }
 
@@ -543,7 +543,7 @@ export const useUpdateRoundDate = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ round, date }) => fixturesApi.updateRoundDate(round, date),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["fixtures"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fixtures"] }),
   })
 }
 
@@ -551,7 +551,7 @@ export const useDeleteFixture = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => fixturesApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["fixtures"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fixtures"] }),
   })
 }
 
@@ -561,8 +561,8 @@ export const useSaveFixtureResult = () => {
     mutationFn: ({ id, homeScore, awayScore, homeGoals, awayGoals }) =>
       fixturesApi.saveResult(id, homeScore, awayScore, homeGoals, awayGoals),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["fixtures"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: ["fixtures"] })
+      qc.invalidateQueries({ queryKey: QK.teams })
     },
   })
 }
@@ -574,7 +574,7 @@ export const useRequestTrade = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body) => tradesApi.request(body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["trades"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trades"] }),
   })
 }
 
@@ -582,7 +582,7 @@ export const useTeamReviewTrade = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, action, reason }) => tradesApi.teamReview(id, action, reason),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["trades"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trades"] }),
   })
 }
 
@@ -591,9 +591,9 @@ export const useReviewTrade = () => {
   return useMutation({
     mutationFn: ({ id, action }) => tradesApi.review(id, action),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["trades"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: ["trades"] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.teams })
     },
   })
 }
@@ -602,7 +602,7 @@ export const useCancelTrade = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: tradesApi.cancel,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["trades"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trades"] }),
   })
 }
 
@@ -610,7 +610,7 @@ export const useCreateTeam = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: teamsApi.create,
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK.teams }),
   })
 }
 
@@ -619,8 +619,8 @@ export const useCreatePlayer = () => {
   return useMutation({
     mutationFn: playersApi.create,
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.teams })
     },
   })
 }
@@ -630,8 +630,8 @@ export const useDeletePlayer = () => {
   return useMutation({
     mutationFn: (id) => playersApi.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.teams })
     },
   })
 }
@@ -641,8 +641,8 @@ export const useUnassignPlayer = () => {
   return useMutation({
     mutationFn: (id) => playersApi.unassign(id),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.teams })
     },
   })
 }
@@ -652,8 +652,8 @@ export const useDeleteTeam = () => {
   return useMutation({
     mutationFn: (id) => teamsApi.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
-      qc.invalidateQueries({ refetchType: "none", queryKey: ["players"] })
+      qc.invalidateQueries({ queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: ["players"] })
     },
   })
 }
@@ -662,7 +662,7 @@ export const useUpdateTeam = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...body }) => teamsApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK.teams }),
   })
 }
 
@@ -671,8 +671,8 @@ export const useUpdateTeamSettings = () => {
   return useMutation({
     mutationFn: ({ id, ...body }) => teamsApi.updateSettings(id, body),
     onSuccess: (data, variables) => {
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.teams })
-      qc.invalidateQueries({ refetchType: "none", queryKey: QK.team(variables.id) })
+      qc.invalidateQueries({ queryKey: QK.teams })
+      qc.invalidateQueries({ queryKey: QK.team(variables.id) })
     },
   })
 }
@@ -696,7 +696,7 @@ export const useSaveLineup = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ fixtureId, matchups }) => lineupsApi.save(fixtureId, matchups),
-    onSuccess: (_, { fixtureId }) => qc.invalidateQueries({ refetchType: "none", queryKey: ["lineup", fixtureId] }),
+    onSuccess: (_, { fixtureId }) => qc.invalidateQueries({ queryKey: ["lineup", fixtureId] }),
   })
 }
 
@@ -704,7 +704,7 @@ export const useClearLineup = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (fixtureId) => lineupsApi.delete(fixtureId),
-    onSuccess: (_, fixtureId) => qc.invalidateQueries({ refetchType: "none", queryKey: ["lineup", fixtureId] }),
+    onSuccess: (_, fixtureId) => qc.invalidateQueries({ queryKey: ["lineup", fixtureId] }),
   })
 }
 
@@ -725,7 +725,7 @@ export const useToggleFavorite = () => {
   return useMutation({
     mutationFn: ({ playerId, isFavorited }) =>
       isFavorited ? favoritesApi.remove(playerId) : favoritesApi.add(playerId),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["favorites"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
   })
 }
 // UCL Knockout hooks
@@ -739,7 +739,7 @@ export const useCreateUclKnockout = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (name) => uclKnockoutApi.create(name),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-knockout-list"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-knockout-list"] }),
   })
 }
 
@@ -748,7 +748,7 @@ export const useSaveUclKnockoutResult = () => {
   return useMutation({
     mutationFn: ({ matchId, player1Score, player2Score, tieWinnerId }) =>
       uclKnockoutApi.saveResult(matchId, player1Score, player2Score, tieWinnerId),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-knockout"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-knockout"] }),
   })
 }
 
@@ -756,7 +756,7 @@ export const useUpdateUclKnockoutMatchPlayers = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ matchId, ...body }) => uclKnockoutApi.updateMatchPlayers(matchId, body),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-knockout"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-knockout"] }),
   })
 }
 
@@ -764,7 +764,7 @@ export const useResetUclKnockout = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => uclKnockoutApi.reset(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-knockout-list"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-knockout-list"] }),
   })
 }
 
@@ -772,7 +772,7 @@ export const useDeleteUclKnockout = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => uclKnockoutApi.deleteTournament(id),
-    onSuccess: () => qc.invalidateQueries({ refetchType: "none", queryKey: ["ucl-knockout-list"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-knockout-list"] }),
   })
 }
 
