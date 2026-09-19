@@ -519,7 +519,17 @@ export const useCreateFixture = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fixturesApi.create,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["fixtures"] }),
+    onSuccess: (newFixture) => {
+      // Immediately inject the new fixture into the cache from the POST
+      // response — no need to wait for the slow full-list refetch (35-69s).
+      // The background invalidation still runs to keep everything in sync.
+      qc.setQueryData(QK.fixtures(undefined), (old = []) =>
+        [...old, newFixture].sort(
+          (a, b) => new Date(a.date) - new Date(b.date) || a.round - b.round
+        )
+      )
+      qc.invalidateQueries({ queryKey: ["fixtures"] })
+    },
   })
 }
 

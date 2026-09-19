@@ -116,24 +116,21 @@ router.get("/public/top-scorers", async (req, res, next) => {
       SELECT
         p.id, p.name, t.name AS team, t.logo_url AS "teamLogo",
         p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl",
-        COALESCE(SUM(
-          CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.player_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.opponent_score, 0)
-            ELSE 0
-          END
-        ), 0) AS goals,
-        COALESCE(SUM(
-          CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.opponent_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.player_score, 0)
-            ELSE 0
-          END
-        ), 0) AS conceded
+        COALESCE(SUM(mr.goals),    0) AS goals,
+        COALESCE(SUM(mr.conceded), 0) AS conceded
       FROM players p
-      JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id) AND mr.match_type = 'weekly'
-      JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.id
+      JOIN (
+        SELECT player_id   AS pid, mr.id AS mr_id,
+               COALESCE(player_score,   0) AS goals,
+               COALESCE(opponent_score, 0) AS conceded
+        FROM match_records mr WHERE match_type = 'weekly'
+        UNION ALL
+        SELECT opponent_id AS pid, mr.id AS mr_id,
+               COALESCE(opponent_score, 0) AS goals,
+               COALESCE(player_score,   0) AS conceded
+        FROM match_records mr WHERE match_type = 'weekly'
+      ) mr ON mr.pid = p.id
+      JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.mr_id
       LEFT JOIN teams t ON p.team_id = t.id
       WHERE wtm.tournament_id = $1
       GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url

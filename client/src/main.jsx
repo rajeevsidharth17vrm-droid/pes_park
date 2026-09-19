@@ -10,16 +10,13 @@ import { useAuthStore } from "./store/authStore"
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Cache is valid for 24 hours in localStorage.
-      // On page load: show localStorage data instantly (no spinner).
-      // On refresh: fetches fresh data → updates localStorage.
-      gcTime: 1000 * 60 * 60 * 24,       // keep in localStorage for 24 hours
-      staleTime: 1000 * 60 * 5,          // data is fresh for 5 minutes
-      // After 5 mins, next mount/focus triggers background refetch
-      // Page refresh ALWAYS fetches fresh (staleTime resets on hard reload)
-      retry: 0,                           // no retries — fail fast if server sleeping
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,              // serve from localStorage on navigation
+      // Strategy: show cached data instantly from localStorage, then
+      // immediately background-refetch so the UI is never stuck on stale data.
+      gcTime: 1000 * 60 * 60 * 24, // keep in localStorage for 24 hours (instant loads)
+      staleTime: 0,                 // always consider data stale → always background-refetch on mount
+      refetchOnMount: true,         // refetch whenever a component mounts (if data is stale)
+      refetchOnWindowFocus: false,  // don't refetch on tab switch (too noisy)
+      retry: 0,                     // no retries — fail fast, don't hammer the DB
     },
   },
 })

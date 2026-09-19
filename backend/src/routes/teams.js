@@ -191,25 +191,22 @@ router.get("/top-scorers", async (req, res, next) => {
         t.logo_url AS "teamLogo",
         p.avatar_id AS "avatarId",
         p.avatar_url AS "avatarUrl",
-        COALESCE(SUM(
-          CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.player_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.opponent_score, 0)
-            ELSE 0
-          END
-        ), 0) AS goals,
-        COALESCE(SUM(
-          CASE
-            WHEN mr.player_id   = p.id THEN COALESCE(mr.opponent_score, 0)
-            WHEN mr.opponent_id = p.id THEN COALESCE(mr.player_score, 0)
-            ELSE 0
-          END
-        ), 0) AS conceded
+        COALESCE(SUM(mr.goals),    0) AS goals,
+        COALESCE(SUM(mr.conceded), 0) AS conceded
       FROM players p
-      LEFT JOIN match_records mr
-        ON (mr.player_id = p.id OR mr.opponent_id = p.id)
-        AND mr.match_type = 'league'
-        AND mr.season_number = $1
+      LEFT JOIN (
+        SELECT player_id   AS pid,
+               COALESCE(player_score,   0) AS goals,
+               COALESCE(opponent_score, 0) AS conceded
+        FROM match_records
+        WHERE match_type = 'league' AND season_number = $1
+        UNION ALL
+        SELECT opponent_id AS pid,
+               COALESCE(opponent_score, 0) AS goals,
+               COALESCE(player_score,   0) AS conceded
+        FROM match_records
+        WHERE match_type = 'league' AND season_number = $1
+      ) mr ON mr.pid = p.id
       LEFT JOIN teams t ON p.team_id = t.id
       GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url
       ORDER BY goals DESC, conceded ASC, p.name ASC
@@ -261,110 +258,168 @@ router.get("/:id/best-league-performer", async (req, res, next) => {
 })
 
 // GET /api/teams — public
+// Uses the pre-computed columns (updated when fixtures are closed) for a fast
+// response. The heavy live-CTE that recomputed standings from match_records on
+// every request was taking 9-32 seconds and starving the connection pool.
 router.get("/", async (req, res, next) => {
   try {
-    const season = await getCurrentSeason()
-    // League Table computed LIVE from match_records every time, rather than
-    // from teams.played/won/drawn/lost (which only ever updated on
-    // "Close Fixture"). Each fixture's running score is recomputed fresh
-    // from every player result logged against it so far — even a partial,
-    // still-in-progress fixture contributes its current standing
-    // immediately, and naturally corrects itself as more results come in
-    // or an existing one gets edited. Close Fixture still exists to mark a
-    // fixture "completed" (which is what triggers the playoff bracket), but
-    // no longer gates whether the table itself reflects a result.
     const result = await query(`
-      WITH fixture_scores AS (
-        SELECT
-          f.id,
-          f.home_team_id,
-          f.away_team_id,
-          CASE
-            WHEN f.status = 'completed' THEN COALESCE(f.home_score, 0)
-            ELSE SUM(CASE
-              WHEN COALESCE(mr.team_id, p.team_id) = f.home_team_id THEN CASE mr.result WHEN 'win' THEN 3 WHEN 'draw' THEN 1 ELSE 0 END
-              WHEN COALESCE(mr.team_id, p.team_id) = f.away_team_id THEN CASE mr.result WHEN 'loss' THEN 3 WHEN 'draw' THEN 1 ELSE 0 END
-              ELSE 0 END)
-          END AS home_pts,
-          CASE
-            WHEN f.status = 'completed' THEN COALESCE(f.away_score, 0)
-            ELSE SUM(CASE
-              WHEN COALESCE(mr.team_id, p.team_id) = f.away_team_id THEN CASE mr.result WHEN 'win' THEN 3 WHEN 'draw' THEN 1 ELSE 0 END
-              WHEN COALESCE(mr.team_id, p.team_id) = f.home_team_id THEN CASE mr.result WHEN 'loss' THEN 3 WHEN 'draw' THEN 1 ELSE 0 END
-              ELSE 0 END)
-          END AS away_pts,
-          CASE
-            WHEN f.status = 'completed' THEN COALESCE(f.home_goals, 0)
-            ELSE COALESCE(SUM(CASE WHEN COALESCE(mr.team_id, p.team_id) = f.home_team_id THEN mr.player_score WHEN COALESCE(mr.team_id, p.team_id) = f.away_team_id THEN mr.opponent_score ELSE 0 END), 0)
-          END AS home_goals,
-          CASE
-            WHEN f.status = 'completed' THEN COALESCE(f.away_goals, 0)
-            ELSE COALESCE(SUM(CASE WHEN COALESCE(mr.team_id, p.team_id) = f.away_team_id THEN mr.player_score WHEN COALESCE(mr.team_id, p.team_id) = f.home_team_id THEN mr.opponent_score ELSE 0 END), 0)
-          END AS away_goals,
-          CASE WHEN f.status = 'completed' THEN 1 ELSE COUNT(mr.id) END AS results_logged
-        FROM fixtures f
-        LEFT JOIN match_records mr ON mr.fixture_id = f.id AND mr.match_type = 'league' AND mr.season_number = $1
-        LEFT JOIN players p ON p.id = mr.player_id
-        GROUP BY f.id, f.home_team_id, f.away_team_id, f.status, f.home_score, f.away_score, f.home_goals, f.away_goals
-      ),
-      fixture_outcomes AS (
-        SELECT *,
-          CASE
-            WHEN results_logged = 0 THEN NULL
-            WHEN home_pts > away_pts THEN 'home'
-            WHEN away_pts > home_pts THEN 'away'
-            ELSE 'draw'
-          END AS outcome
-        FROM fixture_scores
-      ),
-      per_team AS (
-        SELECT home_team_id AS team_id, home_goals AS gf, away_goals AS ga,
-          CASE WHEN outcome = 'home' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts,
-          outcome,
-          (outcome = 'home') AS won, (outcome = 'draw') AS drawn, (outcome = 'away') AS lost
-        FROM fixture_outcomes WHERE outcome IS NOT NULL
-        UNION ALL
-        SELECT away_team_id AS team_id, away_goals AS gf, home_goals AS ga,
-          CASE WHEN outcome = 'away' THEN 3 WHEN outcome = 'draw' THEN 1 ELSE 0 END AS pts,
-          outcome,
-          (outcome = 'away') AS won, (outcome = 'draw') AS drawn, (outcome = 'home') AS lost
-        FROM fixture_outcomes WHERE outcome IS NOT NULL
-      ),
-      team_stats AS (
-        SELECT team_id,
-          COUNT(*) AS played,
-          COUNT(*) FILTER (WHERE won)   AS won,
-          COUNT(*) FILTER (WHERE drawn) AS drawn,
-          COUNT(*) FILTER (WHERE lost)  AS lost,
-          COALESCE(SUM(gf), 0)  AS gf,
-          COALESCE(SUM(ga), 0)  AS ga,
-          COALESCE(SUM(pts), 0) AS points
-        FROM per_team
-        GROUP BY team_id
-      )
       SELECT
-        t.id, t.name, t.logo_url AS "logoUrl", t.anthem_url AS "anthemUrl", t.score_points, t.created_at,
-        t.budget, t.budget - COALESCE((SELECT SUM(auction_price) FROM players WHERE team_id = t.id AND auction_price IS NOT NULL), 0) AS purse,
-        COALESCE(ts.played, 0) AS played,
-        COALESCE(ts.won, 0)    AS won,
-        COALESCE(ts.drawn, 0)  AS drawn,
-        COALESCE(ts.lost, 0)   AS lost,
-        COALESCE(ts.gf, 0)     AS gf,
-        COALESCE(ts.ga, 0)     AS ga,
-        COALESCE(ts.gf, 0) - COALESCE(ts.ga, 0) AS gd,
-        COALESCE(ts.points, 0) AS points,
+        t.id, t.name, t.logo_url AS "logoUrl", t.score_points, t.created_at,
+        t.budget,
+        t.budget - COALESCE(
+          (SELECT SUM(auction_price) FROM players
+           WHERE team_id = t.id AND auction_price IS NOT NULL), 0
+        ) AS purse,
+        COALESCE(t.played, 0) AS played,
+        COALESCE(t.won, 0)    AS won,
+        COALESCE(t.drawn, 0)  AS drawn,
+        COALESCE(t.lost, 0)   AS lost,
+        COALESCE(t.gf, 0)     AS gf,
+        COALESCE(t.ga, 0)     AS ga,
+        COALESCE(t.gf, 0) - COALESCE(t.ga, 0) AS gd,
+        COALESCE(t.score_points, 0) AS points,
         ROW_NUMBER() OVER (
-          ORDER BY COALESCE(ts.points, 0) DESC,
-                   COALESCE(ts.gf, 0) - COALESCE(ts.ga, 0) DESC,
-                   COALESCE(ts.gf, 0) DESC
+          ORDER BY COALESCE(t.score_points, 0) DESC,
+                   COALESCE(t.gf, 0) - COALESCE(t.ga, 0) DESC,
+                   COALESCE(t.gf, 0) DESC
         ) AS position
       FROM teams t
-      LEFT JOIN team_stats ts ON ts.team_id = t.id
       ORDER BY position
-    `, [season])
+    `)
     res.json(result.rows)
   } catch (err) { next(err) }
 })
+
+// ============================================================================
+// Team League Playoffs — top-5 IPL-style bracket:
+//   Qualifier 1 (1st v 2nd) — winner goes straight to the Final.
+//   Eliminator (4th v 5th) — loser is eliminated (5th place).
+//   Knockout Round (3rd v Eliminator winner) — loser is eliminated (4th place).
+//   Qualifier 2 (Q1 loser v Knockout Round winner) — winner reaches the Final.
+//   Final (Q1 winner v Q2 winner).
+// Champion/Runner-up/3rd/4th/5th are derived from this bracket, not raw
+// group-stage standings, and that's what the BDR season awards now use.
+// ============================================================================
+
+const PLAYOFF_SELECT = `
+  SELECT
+    p.id, p.season_number AS "seasonNumber", p.match_type AS "matchType",
+    p.team1_score AS "team1Score", p.team2_score AS "team2Score", p.status,
+    p.winner_team_id AS "winnerTeamId",
+    t1.id AS "team1Id", t1.name AS "team1Name", t1.logo_url AS "team1Logo",
+    t2.id AS "team2Id", t2.name AS "team2Name", t2.logo_url AS "team2Logo"
+  FROM team_league_playoffs p
+  LEFT JOIN teams t1 ON p.team1_id = t1.id
+  LEFT JOIN teams t2 ON p.team2_id = t2.id
+`
+
+async function getCurrentSeason(q = query) {
+  const r = await q("SELECT value FROM app_settings WHERE key = 'current_season'")
+  return parseInt(r.rows[0]?.value || "1")
+}
+
+// GET /api/teams/playoffs/current — read-only bracket for the current season
+router.get("/playoffs/current", async (req, res, next) => {
+  try {
+    const season = await getCurrentSeason()
+    const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
+    res.json({ matches: result.rows })
+  } catch (err) { next(err) }
+})
+
+// POST /api/teams/playoffs/generate — create Qualifier 1, Eliminator, and
+// the Knockout Round's known slot from the current top 5 group-stage
+// standings. Requires every group-stage fixture to be completed first, and
+// only ever generates once per season. This same logic also fires
+// automatically the instant the last group-stage fixture is closed (see
+// routes/fixtures.js) — this manual endpoint exists as a fallback/retry in
+// case that ever needs re-running.
+router.post("/playoffs/generate", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const remainingRes = await query(`SELECT COUNT(*) FROM fixtures WHERE status != 'completed'`)
+    if (parseInt(remainingRes.rows[0].count) > 0) {
+      return res.status(400).json({ error: "Group stage isn't fully complete yet — every fixture needs a result before playoffs can be generated." })
+    }
+
+    const season = await getCurrentSeason()
+    const generated = await generatePlayoffs(season)
+    if (!generated) {
+      return res.status(400).json({ error: "Playoffs already generated for this season, or fewer than 5 teams exist." })
+    }
+
+    const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
+    res.json({ matches: result.rows })
+  } catch (err) { next(err) }
+})
+
+// PATCH /api/teams/playoffs/:id/result — save a match's score, determine
+// the winner, and propagate winner/loser into whichever match is next.
+router.patch("/playoffs/:id/result", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const { team1Score, team2Score } = z.object({
+      team1Score: z.number().int().min(0),
+      team2Score: z.number().int().min(0),
+    }).parse(req.body)
+    if (team1Score === team2Score) {
+      return res.status(400).json({ error: "Playoff matches can't end in a draw — enter a decisive score." })
+    }
+
+    const matchRes = await query("SELECT * FROM team_league_playoffs WHERE id = $1", [req.params.id])
+    const match = matchRes.rows[0]
+    if (!match) return res.status(404).json({ error: "Match not found" })
+    if (!match.team1_id || !match.team2_id) return res.status(400).json({ error: "Both teams aren't set for this match yet." })
+
+    const winnerId = team1Score > team2Score ? match.team1_id : match.team2_id
+    const loserId  = team1Score > team2Score ? match.team2_id : match.team1_id
+
+    await query(
+      "UPDATE team_league_playoffs SET team1_score=$1, team2_score=$2, winner_team_id=$3, status='completed' WHERE id=$4",
+      [team1Score, team2Score, winnerId, match.id]
+    )
+
+    if (match.match_type === "qualifier1") {
+      // Winner → Final (team1 slot), loser → Qualifier 2 (team1 slot, waits for Knockout Round winner)
+      await query("UPDATE team_league_playoffs SET team1_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
+      await query("UPDATE team_league_playoffs SET team1_id=$1 WHERE season_number=$2 AND match_type='qualifier2'", [loserId, match.season_number])
+    } else if (match.match_type === "eliminator") {
+      // Winner → Knockout Round (team2 slot, vs 3rd place), loser eliminated (5th place)
+      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='knockout'", [winnerId, match.season_number])
+    } else if (match.match_type === "knockout") {
+      // Winner → Qualifier 2 (team2 slot), loser eliminated (4th place)
+      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='qualifier2'", [winnerId, match.season_number])
+    } else if (match.match_type === "qualifier2") {
+      // Winner → Final (team2 slot), loser eliminated (3rd place)
+      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
+    } else if (match.match_type === "final") {
+      // Final completed — champion determined
+    }
+
+    // Award BDR to all players on the relevant team(s) based on placement.
+    // Uses claimAward internally so re-saving the same result is safe.
+    try {
+      await awardLeaguePlayoffBdr(match.match_type, winnerId, loserId, match.season_number)
+    } catch (bdrErr) {
+      console.error("League playoff BDR award failed (result still saved):", bdrErr)
+    }
+
+    const fresh = await query(PLAYOFF_SELECT + " WHERE p.id = $1", [match.id])
+    res.json(fresh.rows[0])
+  } catch (err) { next(err) }
+})
+
+// POST /api/teams/playoffs/reset — delete the current season's playoff
+// bracket entirely, for redoing a mistake. Does NOT reverse any BDR
+// already awarded if the Final had already completed — that's a manual
+// correction if it happens.
+router.post("/playoffs/reset", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const season = await getCurrentSeason()
+    await query("DELETE FROM team_league_playoffs WHERE season_number = $1", [season])
+    res.json({ success: true })
+  } catch (err) { next(err) }
+})
+
 
 // GET /api/teams/:id — single team with roster
 // GET /api/teams/:id/logo — returns only the logo_url (base64 data URI)
@@ -685,135 +740,6 @@ router.post("/season-delete", authenticate, adminOnly, async (req, res, next) =>
       success: true,
       message: `Season ${current} deleted. Now back on Season ${current - 1} — its fixtures, team stats, and UCL data were already cleared when Season ${current} started, so Season ${current - 1} begins fresh, not restored.`,
     })
-  } catch (err) { next(err) }
-})
-
-// ============================================================================
-// Team League Playoffs — top-5 IPL-style bracket:
-//   Qualifier 1 (1st v 2nd) — winner goes straight to the Final.
-//   Eliminator (4th v 5th) — loser is eliminated (5th place).
-//   Knockout Round (3rd v Eliminator winner) — loser is eliminated (4th place).
-//   Qualifier 2 (Q1 loser v Knockout Round winner) — winner reaches the Final.
-//   Final (Q1 winner v Q2 winner).
-// Champion/Runner-up/3rd/4th/5th are derived from this bracket, not raw
-// group-stage standings, and that's what the BDR season awards now use.
-// ============================================================================
-
-const PLAYOFF_SELECT = `
-  SELECT
-    p.id, p.season_number AS "seasonNumber", p.match_type AS "matchType",
-    p.team1_score AS "team1Score", p.team2_score AS "team2Score", p.status,
-    p.winner_team_id AS "winnerTeamId",
-    t1.id AS "team1Id", t1.name AS "team1Name", t1.logo_url AS "team1Logo",
-    t2.id AS "team2Id", t2.name AS "team2Name", t2.logo_url AS "team2Logo"
-  FROM team_league_playoffs p
-  LEFT JOIN teams t1 ON p.team1_id = t1.id
-  LEFT JOIN teams t2 ON p.team2_id = t2.id
-`
-
-async function getCurrentSeason(q = query) {
-  const r = await q("SELECT value FROM app_settings WHERE key = 'current_season'")
-  return parseInt(r.rows[0]?.value || "1")
-}
-
-// GET /api/teams/playoffs/current — read-only bracket for the current season
-router.get("/playoffs/current", async (req, res, next) => {
-  try {
-    const season = await getCurrentSeason()
-    const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
-    res.json({ matches: result.rows })
-  } catch (err) { next(err) }
-})
-
-// POST /api/teams/playoffs/generate — create Qualifier 1, Eliminator, and
-// the Knockout Round's known slot from the current top 5 group-stage
-// standings. Requires every group-stage fixture to be completed first, and
-// only ever generates once per season. This same logic also fires
-// automatically the instant the last group-stage fixture is closed (see
-// routes/fixtures.js) — this manual endpoint exists as a fallback/retry in
-// case that ever needs re-running.
-router.post("/playoffs/generate", authenticate, adminOnly, async (req, res, next) => {
-  try {
-    const remainingRes = await query(`SELECT COUNT(*) FROM fixtures WHERE status != 'completed'`)
-    if (parseInt(remainingRes.rows[0].count) > 0) {
-      return res.status(400).json({ error: "Group stage isn't fully complete yet — every fixture needs a result before playoffs can be generated." })
-    }
-
-    const season = await getCurrentSeason()
-    const generated = await generatePlayoffs(season)
-    if (!generated) {
-      return res.status(400).json({ error: "Playoffs already generated for this season, or fewer than 5 teams exist." })
-    }
-
-    const result = await query(PLAYOFF_SELECT + " WHERE p.season_number = $1 ORDER BY p.id", [season])
-    res.json({ matches: result.rows })
-  } catch (err) { next(err) }
-})
-
-// PATCH /api/teams/playoffs/:id/result — save a match's score, determine
-// the winner, and propagate winner/loser into whichever match is next.
-router.patch("/playoffs/:id/result", authenticate, adminOnly, async (req, res, next) => {
-  try {
-    const { team1Score, team2Score } = z.object({
-      team1Score: z.number().int().min(0),
-      team2Score: z.number().int().min(0),
-    }).parse(req.body)
-    if (team1Score === team2Score) {
-      return res.status(400).json({ error: "Playoff matches can't end in a draw — enter a decisive score." })
-    }
-
-    const matchRes = await query("SELECT * FROM team_league_playoffs WHERE id = $1", [req.params.id])
-    const match = matchRes.rows[0]
-    if (!match) return res.status(404).json({ error: "Match not found" })
-    if (!match.team1_id || !match.team2_id) return res.status(400).json({ error: "Both teams aren't set for this match yet." })
-
-    const winnerId = team1Score > team2Score ? match.team1_id : match.team2_id
-    const loserId  = team1Score > team2Score ? match.team2_id : match.team1_id
-
-    await query(
-      "UPDATE team_league_playoffs SET team1_score=$1, team2_score=$2, winner_team_id=$3, status='completed' WHERE id=$4",
-      [team1Score, team2Score, winnerId, match.id]
-    )
-
-    if (match.match_type === "qualifier1") {
-      // Winner → Final (team1 slot), loser → Qualifier 2 (team1 slot, waits for Knockout Round winner)
-      await query("UPDATE team_league_playoffs SET team1_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
-      await query("UPDATE team_league_playoffs SET team1_id=$1 WHERE season_number=$2 AND match_type='qualifier2'", [loserId, match.season_number])
-    } else if (match.match_type === "eliminator") {
-      // Winner → Knockout Round (team2 slot, vs 3rd place), loser eliminated (5th place)
-      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='knockout'", [winnerId, match.season_number])
-    } else if (match.match_type === "knockout") {
-      // Winner → Qualifier 2 (team2 slot), loser eliminated (4th place)
-      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='qualifier2'", [winnerId, match.season_number])
-    } else if (match.match_type === "qualifier2") {
-      // Winner → Final (team2 slot), loser eliminated (3rd place)
-      await query("UPDATE team_league_playoffs SET team2_id=$1 WHERE season_number=$2 AND match_type='final'", [winnerId, match.season_number])
-    } else if (match.match_type === "final") {
-      // Final completed — champion determined
-    }
-
-    // Award BDR to all players on the relevant team(s) based on placement.
-    // Uses claimAward internally so re-saving the same result is safe.
-    try {
-      await awardLeaguePlayoffBdr(match.match_type, winnerId, loserId, match.season_number)
-    } catch (bdrErr) {
-      console.error("League playoff BDR award failed (result still saved):", bdrErr)
-    }
-
-    const fresh = await query(PLAYOFF_SELECT + " WHERE p.id = $1", [match.id])
-    res.json(fresh.rows[0])
-  } catch (err) { next(err) }
-})
-
-// POST /api/teams/playoffs/reset — delete the current season's playoff
-// bracket entirely, for redoing a mistake. Does NOT reverse any BDR
-// already awarded if the Final had already completed — that's a manual
-// correction if it happens.
-router.post("/playoffs/reset", authenticate, adminOnly, async (req, res, next) => {
-  try {
-    const season = await getCurrentSeason()
-    await query("DELETE FROM team_league_playoffs WHERE season_number = $1", [season])
-    res.json({ success: true })
   } catch (err) { next(err) }
 })
 

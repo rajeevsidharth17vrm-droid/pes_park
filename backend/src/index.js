@@ -20,6 +20,13 @@ import { errorHandler } from "./middleware/errorHandler.js"
 const app  = express()
 const PORT = process.env.PORT || 3001
 
+// ── Crash guard ───────────────────────────────────────────────────────────────
+// Prevent Supabase force-closing a slow connection from taking down the whole
+// server. Log the error and keep running — individual requests still fail with
+// a 500, but the server stays up for all other requests.
+process.on("uncaughtException",  (err) => console.error("[uncaughtException]",  err))
+process.on("unhandledRejection", (err) => console.error("[unhandledRejection]", err))
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 // CORS_ORIGINS env var: comma-separated list of extra allowed origins.
 // The three below are always allowed regardless of env config.
