@@ -116,8 +116,7 @@ router.get("/public/top-scorers", async (req, res, next) => {
 
     const result = await query(`
       SELECT
-        p.id, p.name, t.name AS team, t.logo_url AS "teamLogo",
-        p.avatar_id AS "avatarId",
+        p.id, p.name, t.name AS team, p.avatar_id AS "avatarId",
         COALESCE(SUM(
           CASE
             WHEN qtm.player1_id = p.id THEN COALESCE(qtm.player1_score, 0)
@@ -139,7 +138,7 @@ router.get("/public/top-scorers", async (req, res, next) => {
         AND (qtm.player1_id = p.id OR qtm.player2_id = p.id)
         AND qtm.status = 'completed'
       LEFT JOIN teams t ON p.team_id = t.id
-      GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id
+      GROUP BY p.id, p.name, t.name, p.avatar_id
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
     `, [t.rows[0].id])

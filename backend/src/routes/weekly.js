@@ -114,8 +114,7 @@ router.get("/public/top-scorers", async (req, res, next) => {
 
     const result = await query(`
       SELECT
-        p.id, p.name, t.name AS team, t.logo_url AS "teamLogo",
-        p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl",
+        p.id, p.name, t.name AS team, p.avatar_id AS "avatarId", p.avatar_url AS "avatarUrl",
         COALESCE(SUM(mr.goals),    0) AS goals,
         COALESCE(SUM(mr.conceded), 0) AS conceded
       FROM players p
@@ -133,7 +132,7 @@ router.get("/public/top-scorers", async (req, res, next) => {
       JOIN weekly_tournament_matches wtm ON wtm.match_record_id = mr.mr_id
       LEFT JOIN teams t ON p.team_id = t.id
       WHERE wtm.tournament_id = $1
-      GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url
+      GROUP BY p.id, p.name, t.name, p.avatar_id, p.avatar_url
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
     `, [t.rows[0].id])

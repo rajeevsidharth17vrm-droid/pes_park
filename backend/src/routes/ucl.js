@@ -553,7 +553,6 @@ router.get("/top-scorers", async (req, res, next) => {
         p.id,
         p.name,
         t.name AS team,
-        t.logo_url AS "teamLogo",
         p.avatar_id AS "avatarId",
         p.avatar_url AS "avatarUrl",
         g.name AS "groupName",
@@ -579,7 +578,7 @@ router.get("/top-scorers", async (req, res, next) => {
         AND (uf.player1_id = p.id OR uf.player2_id = p.id)
         AND uf.status = 'completed'
       WHERE p.ucl_group_id IS NOT NULL AND g.status = 'active'
-      GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url, g.name
+      GROUP BY p.id, p.name, t.name, p.avatar_id, p.avatar_url, g.name
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
     `)

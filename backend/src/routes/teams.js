@@ -188,7 +188,6 @@ router.get("/top-scorers", async (req, res, next) => {
         p.id,
         p.name,
         t.name AS team,
-        t.logo_url AS "teamLogo",
         p.avatar_id AS "avatarId",
         p.avatar_url AS "avatarUrl",
         COALESCE(SUM(mr.goals),    0) AS goals,
@@ -208,7 +207,7 @@ router.get("/top-scorers", async (req, res, next) => {
         WHERE match_type = 'league' AND season_number = $1
       ) mr ON mr.pid = p.id
       LEFT JOIN teams t ON p.team_id = t.id
-      GROUP BY p.id, p.name, t.name, t.logo_url, p.avatar_id, p.avatar_url
+      GROUP BY p.id, p.name, t.name, p.avatar_id, p.avatar_url
       ORDER BY goals DESC, conceded ASC, p.name ASC
       LIMIT 10
     `, [season])
@@ -265,7 +264,7 @@ router.get("/", async (req, res, next) => {
   try {
     const result = await query(`
       SELECT
-        t.id, t.name, t.logo_url AS "logoUrl", t.score_points, t.created_at,
+        t.id, t.name, t.score_points, t.created_at,
         t.budget,
         t.budget - COALESCE(
           (SELECT SUM(auction_price) FROM players
