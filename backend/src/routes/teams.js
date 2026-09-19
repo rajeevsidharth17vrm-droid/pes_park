@@ -277,9 +277,9 @@ router.get("/", async (req, res, next) => {
         COALESCE(t.gf, 0)     AS gf,
         COALESCE(t.ga, 0)     AS ga,
         COALESCE(t.gf, 0) - COALESCE(t.ga, 0) AS gd,
-        COALESCE(t.score_points, 0) AS points,
+        COALESCE(t.won, 0) * 3 + COALESCE(t.drawn, 0) AS points,
         ROW_NUMBER() OVER (
-          ORDER BY COALESCE(t.score_points, 0) DESC,
+          ORDER BY (COALESCE(t.won, 0) * 3 + COALESCE(t.drawn, 0)) DESC,
                    COALESCE(t.gf, 0) - COALESCE(t.ga, 0) DESC,
                    COALESCE(t.gf, 0) DESC
         ) AS position
