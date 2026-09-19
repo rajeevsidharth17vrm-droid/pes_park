@@ -287,6 +287,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <TeamAvatar
+                          teamId={team.id}
                           logoUrl={team.logoUrl}
                           name={team.name}
                           fallbackClassName={isFirst ? "bg-gold/25 text-gold" : "bg-surface-border text-slate-400"}
