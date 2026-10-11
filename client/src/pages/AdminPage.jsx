@@ -17,6 +17,7 @@ import UclResults from "../components/admin/UclResults"
 import UclKnockoutAdmin from "../components/admin/UclKnockoutAdmin"
 import WeeklyAdmin from "../components/admin/WeeklyTournament"
 import QuickTournamentAdmin from "../components/admin/QuickTournament"
+import DuoAdmin from "../components/admin/DuoAdmin"
 import Loading from "../components/common/Loading"
 import { usePlayers, useRecords, useFixtures, useTrades } from "../lib/queries"
 import { teamsApi } from "../lib/api"
@@ -339,6 +340,7 @@ const TABS = [
   { id: "uclknockout",  label: "Solo Tour Knockout",  icon: Trophy },
   { id: "weekly",     label: "Weekend Series",       icon: Trophy          },
   { id: "quicktournament", label: "Quick Tournament", icon: Trophy  },
+  { id: "duo",          label: "Duo",              icon: Users   },
   { id: "fixtures",   label: "Fixtures",     icon: Calendar        },
   { id: "teamresults",  label: "Team Results",   icon: Users           },
   { id: "teamplayoffs", label: "Team Knockout",  icon: Trophy          },
@@ -495,6 +497,7 @@ export default function AdminPage() {
         {activeTab === "quicktournament" && (
           <QuickTournamentAdmin />
         )}
+        {activeTab === "duo" && <DuoAdmin />}
         {activeTab === "fixtures" && (
           <FixtureResults />
         )}

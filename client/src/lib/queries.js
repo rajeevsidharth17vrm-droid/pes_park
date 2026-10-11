@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { teamsApi, playersApi, recordsApi, fixturesApi, tradesApi, lineupsApi, favoritesApi, settingsApi, leagueInfoApi, uclApi, weeklyApi, quickTournamentApi, uclKnockoutApi } from "./api"
+import { duoApi } from "./duoApi"
 
 export const QK = {
   teams:    ["teams"],
@@ -792,3 +793,219 @@ export const usePlayerCompareStats    = (id) =>
 
 export const usePlayerPerformanceZones = (id, season = "current") =>
   useQuery({ queryKey: ["player-performance-zones", String(id), season], queryFn: () => playersApi.performanceZones(id, season), enabled: !!id })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DUO — Dynamic Team Tournament hooks
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const useDuoTournaments = (season) =>
+  useQuery({ queryKey: ["duo-tournaments", season ?? null], queryFn: () => duoApi.listTournaments(season) })
+
+export const useDuoTournament = (id) =>
+  useQuery({ queryKey: ["duo-tournament", id], queryFn: () => duoApi.getTournament(id), enabled: !!id })
+
+export const useDuoFixtures = (tournamentId) =>
+  useQuery({ queryKey: ["duo-fixtures", tournamentId], queryFn: () => duoApi.listFixtures(tournamentId), enabled: !!tournamentId })
+
+export const useDuoStandings = (tournamentId) =>
+  useQuery({ queryKey: ["duo-standings", tournamentId], queryFn: () => duoApi.getStandings(tournamentId), enabled: !!tournamentId })
+
+export const useDuoTopScorers = (tournamentId) =>
+  useQuery({ queryKey: ["duo-top-scorers", tournamentId], queryFn: () => duoApi.getTopScorers(tournamentId), enabled: !!tournamentId })
+
+export const useCreateDuoTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body) => duoApi.createTournament(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["duo-tournaments"] }),
+  })
+}
+
+export const useUpdateDuoTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }) => duoApi.updateTournament(id, body),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournaments"] })
+      qc.invalidateQueries({ queryKey: ["duo-tournament", id] })
+    },
+  })
+}
+
+export const useDeleteDuoTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id) => duoApi.deleteTournament(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["duo-tournaments"] }),
+  })
+}
+
+export const useCompleteDuoTournament = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id) => duoApi.completeTournament(id),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournaments"] })
+      qc.invalidateQueries({ queryKey: ["duo-tournament", id] })
+    },
+  })
+}
+
+export const useCreateDuoTeam = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, name }) => duoApi.createTeam(tournamentId, name),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+    },
+  })
+}
+
+export const useDeleteDuoTeam = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, teamId }) => duoApi.deleteTeam(tournamentId, teamId),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+    },
+  })
+}
+
+export const useAddDuoPlayer = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, teamId, player_id, slot }) => duoApi.addPlayer(tournamentId, teamId, player_id, slot),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+    },
+  })
+}
+
+export const useRemoveDuoPlayer = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, teamId, playerId }) => duoApi.removePlayer(tournamentId, teamId, playerId),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+    },
+  })
+}
+
+export const useGenerateDuoFixtures = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tournamentId) => duoApi.generateFixtures(tournamentId),
+    onSuccess: (_, tournamentId) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournaments"] })
+    },
+  })
+}
+
+export const useDeleteDuoFixtures = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tournamentId) => duoApi.deleteFixtures(tournamentId),
+    onSuccess: (_, tournamentId) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournaments"] })
+    },
+  })
+}
+
+export const useSaveDuoResult = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ fixtureId, matchups }) => duoApi.saveResult(fixtureId, matchups),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", data.tournament_id] })
+      qc.invalidateQueries({ queryKey: ["duo-standings", data.tournament_id] })
+      qc.invalidateQueries({ queryKey: ["duo-top-scorers", data.tournament_id] })
+    },
+  })
+}
+
+export const useResetDuoFixture = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ fixtureId, tournamentId }) => duoApi.resetFixture(fixtureId),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-standings", tournamentId] })
+    },
+  })
+}
+
+export const useSetDuoTiebreaker = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ fixtureId, tournamentId, ...body }) => duoApi.setTiebreaker(fixtureId, body),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-standings", tournamentId] })
+    },
+  })
+}
+
+// ── Group Knockout hooks ──────────────────────────────────────────────────────
+
+export const useDuoGroupStandings = (tournamentId) =>
+  useQuery({
+    queryKey: ["duo-group-standings", tournamentId],
+    queryFn: () => duoApi.getGroupStandings(tournamentId),
+    enabled: !!tournamentId,
+  })
+
+export const useDuoFixturesByStage = (tournamentId, stage) =>
+  useQuery({
+    queryKey: ["duo-fixtures", tournamentId, stage],
+    queryFn: () => duoApi.listFixturesByStage(tournamentId, stage),
+    enabled: !!tournamentId && !!stage,
+  })
+
+export const useDrawDuoGroups = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, ...body }) => duoApi.drawGroups(tournamentId, body),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-group-standings", tournamentId] })
+    },
+  })
+}
+
+export const useGenerateDuoGroupFixtures = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tournamentId) => duoApi.generateGroupFixtures(tournamentId),
+    onSuccess: (_, tournamentId) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournaments"] })
+    },
+  })
+}
+
+export const useGenerateDuoKnockout = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, advance_per_group }) =>
+      duoApi.generateKnockout(tournamentId, { advance_per_group }),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+    },
+  })
+}
+
+export const useDeleteDuoKnockoutFixtures = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tournamentId) => duoApi.deleteKnockoutFixtures(tournamentId),
+    onSuccess: (_, tournamentId) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+    },
+  })
+}

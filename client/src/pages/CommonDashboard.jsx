@@ -12,6 +12,7 @@ import TrophyRanking from "../components/dashboard/TrophyRanking"
 import UclStandings from "../components/dashboard/UclStandings"
 import WeeklyDashboard from "../components/dashboard/WeeklyDashboard"
 import QuickTournamentDashboard from "../components/dashboard/QuickTournamentDashboard"
+import DuoDashboard from "../components/dashboard/DuoDashboard"
 import PlayersDirectory from "../components/dashboard/PlayersDirectory"
 import PastSeasonDashboard from "../components/dashboard/PastSeasonDashboard"
 import PlayerComparison from "../components/dashboard/PlayerComparison"
@@ -23,7 +24,7 @@ import weeklyTrophyLogo from "../../images/Weekly.png"
 import uclTrophyLogo from "../../images/ucl.png"
 import qtTrophyLogo  from "../../images/qt.png"
 import goldenBootLogo from "../../images/Golden Boot.png"
-import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs } from "../lib/queries"
+import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs, useDuoTournaments } from "../lib/queries"
 
 // Resolves a player's chosen avatar — custom upload takes priority,
 // falls back to their picked preset character, then to nothing at all.
@@ -149,6 +150,7 @@ const BASE_PANEL_OPTIONS = [
   { value: "ucl",        label: "Solo Tour"            },
   { value: "weekly",     label: "Weekend Series"       },
   { value: "quick",      label: "Quick Tournament"     },
+  // Duo entries are added dynamically from duoTournaments below
 ]
 
 export default function CommonDashboard() {
@@ -165,6 +167,7 @@ export default function CommonDashboard() {
   const { data: uclTopScorers = [] }                      = useUclTopScorers()
   const { data: weeklyTopScorers = [] }                   = useWeeklyTopScorers()
   const { data: quickTopScorers = [] }                    = useQuickTournamentTopScorers()
+  const { data: duoTournaments = [] }                     = useDuoTournaments()
 
   const urlParams = new URLSearchParams(window.location.search)
 
@@ -695,12 +698,26 @@ export default function CommonDashboard() {
               </div>
 
               {/* Panel — only shown on the main competition views */}
-              {["standings", "playoffs", "ucl", "weekly", "quick"].includes(activePanel) && (() => {
-                const panelOptions = hasPlayoffs
-                  ? [...BASE_PANEL_OPTIONS.slice(0, 1),
-                     { value: "playoffs", label: "Auction Tour Playoffs" },
-                     ...BASE_PANEL_OPTIONS.slice(1)]
-                  : BASE_PANEL_OPTIONS
+              {(["standings", "playoffs", "ucl", "weekly", "quick"].includes(activePanel) || activePanel.startsWith("duo-")) && (() => {
+                // Build duo options from fetched tournaments (active + completed)
+                const duoOptions = duoTournaments
+                  .filter(t => t.status !== "draft")
+                  .map(t => ({
+                    value: `duo-${t.id}`,
+                    label: `Duo · ${t.name}`,
+                  }))
+
+                const playoffOptions = hasPlayoffs
+                  ? [{ value: "playoffs", label: "Auction Tour Playoffs" }]
+                  : []
+
+                const panelOptions = [
+                  BASE_PANEL_OPTIONS[0],       // Auction Tour
+                  ...playoffOptions,
+                  ...BASE_PANEL_OPTIONS.slice(1), // Solo Tour, Weekend Series, Quick Tournament
+                  ...duoOptions,               // one entry per Duo tournament
+                ]
+
                 return (
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Dashboard view</p>
@@ -728,6 +745,9 @@ export default function CommonDashboard() {
                 {activePanel === "ucl"       && <UclStandings onPlayerClick={handlePlayer} />}
                 {activePanel === "weekly"    && <WeeklyDashboard onPlayerClick={handlePlayer} />}
                 {activePanel === "quick"     && <QuickTournamentDashboard onPlayerClick={handlePlayer} />}
+                {activePanel.startsWith("duo-") && (
+                  <DuoDashboard tournamentId={parseInt(activePanel.replace("duo-", ""), 10)} />
+                )}
                 {activePanel === "bdr"       && <BDRRanking players={players} onPlayerClick={handlePlayer} />}
                 {activePanel === "bestplayer" && <BestPlayerRanking players={players} onPlayerClick={handlePlayer} />}
                 {activePanel === "market"    && <MarketValues players={players} onPlayerClick={handlePlayer} />}
