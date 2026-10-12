@@ -3,11 +3,13 @@
  *
  * Tabs: Tournaments → Teams & Players → Groups (group_knockout only) → Fixtures → Standings
  */
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import {
   Plus, Trash2, ChevronRight, Users, Trophy, RefreshCw,
-  CheckCircle, AlertCircle, X, Shield, ListOrdered, Shuffle, Settings2
+  CheckCircle, AlertCircle, X, Shield, ListOrdered, Shuffle, Settings2, Download
 } from "lucide-react"
+import { toPng } from "html-to-image"
+import logoUrl from "../../../images/logo.png"
 import {
   useDuoTournaments, useDuoTournament, useDuoFixtures, useDuoStandings, useDuoTopScorers,
   useCreateDuoTournament, useDeleteDuoTournament, useUpdateDuoTournament, useCompleteDuoTournament,
@@ -305,18 +307,20 @@ function TeamManager({ tournament }) {
   return (
     <div className="space-y-4">
       <SectionTitle>Teams & Players ({tournament.team_size}v{tournament.team_size})</SectionTitle>
-      <Err msg={err} />
 
       {/* Add team */}
-      <form onSubmit={handleCreateTeam} className="flex gap-2">
-        <input value={newTeamName} onChange={e => setNewTeamName(e.target.value)}
-          placeholder="New team name…"
-          className="flex-1 bg-pitch-800 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40" />
-        <button type="submit" disabled={createTeam.isPending}
-          className="flex items-center gap-1 px-3 py-2 rounded-lg bg-accent text-pitch-950 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50">
-          <Plus className="w-4 h-4" /> Add Team
-        </button>
-      </form>
+      <div className="space-y-2">
+        <form onSubmit={handleCreateTeam} className="flex gap-2">
+          <input value={newTeamName} onChange={e => { setNewTeamName(e.target.value); setErr("") }}
+            placeholder="Type a team name then click Add Team…"
+            className="flex-1 bg-pitch-800 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40" />
+          <button type="submit" disabled={!newTeamName.trim() || createTeam.isPending}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-accent text-pitch-950 text-sm font-semibold hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+            <Plus className="w-4 h-4" /> {createTeam.isPending ? "Adding…" : "Add Team"}
+          </button>
+        </form>
+        <Err msg={err} />
+      </div>
 
       {/* Team list */}
       <div className="space-y-3">
@@ -397,6 +401,9 @@ function GroupDrawPanel({ tournament }) {
   const [advancePerGroup, setAdvancePerGroup] = useState(2)
   // manual assignments: { [teamId]: groupNumber }
   const [manualAssign, setManualAssign] = useState({})
+  // picker state for the two-dropdown UI
+  const [pickerTeam, setPickerTeam]   = useState("")   // team id (string)
+  const [pickerGroup, setPickerGroup] = useState(1)    // group number
   const [err, setErr] = useState("")
   const [info, setInfo] = useState("")
 
@@ -410,14 +417,17 @@ function GroupDrawPanel({ tournament }) {
     try {
       let body = { mode, num_groups: numGroups }
       if (mode === "manual") {
+        // Merge: manualAssign takes priority over existing db group_number
         const assignments = teams.map(t => ({
           teamId: t.id,
-          groupNumber: manualAssign[t.id] ?? 1,
+          groupNumber: manualAssign[t.id] ?? t.group_number ?? 1,
         }))
         body.assignments = assignments
       }
       await drawGroups.mutateAsync({ tournamentId: tournament.id, ...body })
-      setInfo("Groups drawn! Now generate group fixtures below.")
+      setManualAssign({})   // clear local state — server is now source of truth
+      setPickerTeam("")
+      setInfo(mode === "manual" ? "Groups saved!" : "Groups drawn! Now generate group fixtures below.")
     } catch (e) {
       setErr(e.response?.data?.error ?? e.message)
     }
@@ -507,35 +517,115 @@ function GroupDrawPanel({ tournament }) {
           </select>
         </div>
 
-        {/* Manual assignment per team */}
-        {mode === "manual" && (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-400 font-medium">Assign each team to a group:</p>
-            {teams.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">No teams added yet — go to the Teams tab first.</p>
-            ) : (
-              teams.map(t => {
-                const currentGroup = manualAssign[t.id] ?? t.group_number ?? 1
-                return (
-                  <div key={t.id} className="flex items-center gap-3 px-3 py-2 bg-pitch-900 rounded-lg">
-                    <Shield className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span className="flex-1 text-sm text-white truncate">{t.name}</span>
+        {/* ── Manual: two-dropdown picker ── */}
+        {mode === "manual" && (() => {
+          // Teams not yet assigned in manualAssign (also exclude those already in DB group_number unless overridden)
+          const assignedIds = new Set(Object.keys(manualAssign).map(Number))
+          // Also treat DB-assigned teams as assigned (visible in group cards, removable)
+          const dbAssignedIds = new Set(teams.filter(t => t.group_number != null).map(t => t.id))
+          const unassigned = teams.filter(t => !assignedIds.has(t.id) && !dbAssignedIds.has(t.id))
+
+          // Build group → teams map from manualAssign + existing db group_number
+          const gMap = {}
+          for (let i = 1; i <= numGroups; i++) gMap[i] = []
+          teams.forEach(t => {
+            const g = manualAssign[t.id] ?? t.group_number
+            if (g && gMap[g]) gMap[g].push(t)
+          })
+
+          const allAssigned = teams.length > 0 && teams.every(t => manualAssign[t.id] != null || t.group_number != null)
+
+          function assignTeam() {
+            if (!pickerTeam) return
+            setManualAssign(prev => ({ ...prev, [+pickerTeam]: pickerGroup }))
+            // pick next unassigned team automatically
+            const next = teams.find(t => t.id !== +pickerTeam && !Object.keys(manualAssign).map(Number).includes(t.id) && t.group_number == null && t.id !== +pickerTeam)
+            setPickerTeam(next ? String(next.id) : "")
+          }
+
+          function removeTeam(teamId) {
+            setManualAssign(prev => {
+              const n = { ...prev }
+              delete n[teamId]
+              return n
+            })
+            // If team had a DB group_number, we need to track removal — set to 0 to mark "unassigned"
+          }
+
+          return (
+            <div className="space-y-4">
+              {teams.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">No teams added yet — go to the Teams tab first.</p>
+              ) : (
+                <>
+                  {/* Picker row */}
+                  <div className="flex items-center gap-2">
                     <select
-                      value={currentGroup}
-                      onChange={e => setManualAssign(prev => ({ ...prev, [t.id]: +e.target.value }))}
-                      className="bg-pitch-800 border border-accent/30 rounded-lg px-3 py-1.5 text-sm text-accent font-semibold focus:outline-none focus:border-accent/60">
+                      value={pickerTeam}
+                      onChange={e => setPickerTeam(e.target.value)}
+                      className="flex-1 bg-pitch-800 border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/40">
+                      <option value="">— Select Team —</option>
+                      {unassigned.map(t => (
+                        <option key={t.id} value={String(t.id)}>{t.name}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={pickerGroup}
+                      onChange={e => setPickerGroup(+e.target.value)}
+                      className="bg-pitch-800 border border-accent/30 rounded-lg px-3 py-2 text-sm text-accent font-semibold focus:outline-none focus:border-accent/60">
                       {Array.from({ length: numGroups }, (_, i) => (
                         <option key={i+1} value={i+1}>Group {GROUP_LETTERS[i]}</option>
                       ))}
                     </select>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        )}
 
-        {/* Current group assignment preview (auto mode or after draw) */}
+                    <button
+                      onClick={assignTeam}
+                      disabled={!pickerTeam}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg bg-accent text-pitch-950 text-xs font-semibold hover:bg-accent/90 disabled:opacity-40 shrink-0">
+                      <Plus className="w-3.5 h-3.5" /> Assign
+                    </button>
+                  </div>
+
+                  {/* Group cards showing assigned teams */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {Array.from({ length: numGroups }, (_, i) => {
+                      const g = i + 1
+                      const gTeams = gMap[g] ?? []
+                      return (
+                        <div key={g} className="bg-pitch-900 border border-surface-border rounded-lg p-3 space-y-2 min-h-[72px]">
+                          <p className="text-[10px] font-bold text-accent uppercase tracking-wider">Group {GROUP_LETTERS[i]}</p>
+                          {gTeams.length === 0 ? (
+                            <p className="text-[10px] text-slate-600 italic">Empty</p>
+                          ) : (
+                            gTeams.map(t => (
+                              <div key={t.id} className="flex items-center gap-2">
+                                <span className="flex-1 text-xs text-slate-300 truncate">{t.name}</span>
+                                <button
+                                  onClick={() => removeTeam(t.id)}
+                                  className="p-0.5 rounded hover:bg-red-500/10 text-slate-600 hover:text-red-400 transition-colors">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {allAssigned && (
+                    <p className="text-xs text-emerald-400 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" /> All teams assigned — click Save below.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* Current group assignment preview (auto mode) */}
         {allGrouped && mode === "auto" && (
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(groupMap).sort((a,b) => +a[0] - +b[0]).map(([g, gTeams]) => (
@@ -822,11 +912,96 @@ function TiebreakerForm({ fixture, tournament, onClose }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixture list renderer (shared between group and knockout stages)
 // ─────────────────────────────────────────────────────────────────────────────
-function FixtureList({ fixtures, tournament, resetFixture }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Duo Fixture Export Card (renders off-screen, captured as PNG)
+// ─────────────────────────────────────────────────────────────────────────────
+function DuoFixtureExportCard({ round, fixtures, exportRef, visible, tournamentName }) {
+  return (
+    <div
+      ref={exportRef}
+      style={{
+        position: "fixed",
+        left: visible ? 0 : "-9999px",
+        top: 0,
+        width: 800,
+        background: "#050810",
+        padding: 36,
+        fontFamily: "system-ui, sans-serif",
+        overflow: "visible",
+        zIndex: visible ? 9999 : -1,
+        opacity: visible ? 1 : 0,
+        pointerEvents: "none",
+      }}
+    >
+      {/* Watermark */}
+      <img src={logoUrl} alt="" style={{
+        position: "absolute", top: "50%", left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: 280, height: 280, objectFit: "contain",
+        opacity: 0.04, pointerEvents: "none",
+      }} />
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, position: "relative" }}>
+        <img src={logoUrl} alt="Pes Park" style={{ width: 44, height: 44, objectFit: "contain" }} />
+        <div>
+          <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>
+            Pes Park · {tournamentName ?? "Duo Tournament"}
+          </p>
+          <p style={{ color: "#ffffff", fontSize: 22, fontWeight: 800, margin: 0 }}>Round {round} Fixtures</p>
+        </div>
+      </div>
+
+      {/* Fixtures */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>
+        {fixtures.map(f => (
+          <div key={f.id} style={{
+            display: "flex", alignItems: "center",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 12, padding: "14px 20px",
+          }}>
+            {/* Home team */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, justifyContent: "flex-end" }}>
+              <p style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 700, margin: 0 }}>{f.home_team_name ?? "TBD"}</p>
+              <div style={{ width: 32, height: 32, borderRadius: 4, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "#475569", fontSize: 12, fontWeight: 700 }}>{(f.home_team_name ?? "?")[0]}</span>
+              </div>
+            </div>
+
+            {/* Score / vs */}
+            <div style={{ padding: "0 18px", textAlign: "center", flexShrink: 0 }}>
+              {f.status === "completed"
+                ? <span style={{ color: "#94a3b8", fontSize: 16, fontWeight: 800, fontFamily: "monospace" }}>{f.home_score ?? 0} – {f.away_score ?? 0}</span>
+                : <span style={{ color: "#475569", fontSize: 13, fontWeight: 700 }}>vs</span>
+              }
+            </div>
+
+            {/* Away team */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 4, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "#475569", fontSize: 12, fontWeight: 700 }}>{(f.away_team_name ?? "?")[0]}</span>
+              </div>
+              <p style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 700, margin: 0 }}>{f.away_team_name ?? "TBD"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p style={{ color: "#1e293b", fontSize: 10, textAlign: "right", marginTop: 20 }}>pes-park-opal.vercel.app</p>
+    </div>
+  )
+}
+
+function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
   const [enteringResult, setEnteringResult] = useState(null)
   const [enteringTb, setEnteringTb] = useState(null)
 
-  const byRound = fixtures.reduce((acc, f) => {
+  const displayFixtures = activeRound === "all" || activeRound == null
+    ? fixtures
+    : fixtures.filter(f => f.round === Number(activeRound))
+
+  const byRound = displayFixtures.reduce((acc, f) => {
     const r = f.round ?? 0
     if (!acc[r]) acc[r] = []
     acc[r].push(f)
@@ -922,6 +1097,37 @@ function FixtureList({ fixtures, tournament, resetFixture }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Round filter + export bar (shared by all fixture sections)
+// ─────────────────────────────────────────────────────────────────────────────
+function RoundFilterBar({ fixtures, activeRound, setActiveRound, onExport, exporting }) {
+  const rounds = [...new Set(fixtures.map(f => f.round))].filter(Boolean).sort((a, b) => a - b)
+  if (rounds.length === 0) return null
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1 bg-pitch-800 border border-surface-border rounded-xl p-1 overflow-x-auto">
+        <button onClick={() => setActiveRound("all")}
+          className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
+            activeRound === "all" ? "bg-surface text-white border border-surface-border" : "text-slate-500 hover:text-white"
+          )}>All</button>
+        {rounds.map(r => (
+          <button key={r} onClick={() => setActiveRound(r)}
+            className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
+              activeRound === r ? "bg-surface text-white border border-surface-border" : "text-slate-500 hover:text-white"
+            )}>Round {r}</button>
+        ))}
+      </div>
+      {activeRound !== "all" && (
+        <button onClick={onExport} disabled={exporting}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent/15 text-accent border border-accent/25 text-xs font-semibold hover:bg-accent/25 transition-colors disabled:opacity-50">
+          <Download className="w-3.5 h-3.5" />
+          {exporting ? "Exporting…" : `Download Round ${activeRound}`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Fixtures Panel (handles all formats)
 // ─────────────────────────────────────────────────────────────────────────────
 function FixturesPanel({ tournament }) {
@@ -932,7 +1138,11 @@ function FixturesPanel({ tournament }) {
   const deleteFixtures   = useDeleteDuoFixtures()
   const resetFixture     = useResetDuoFixture()
 
-  const [stageTab, setStageTab] = useState("group")
+  const [stageTab, setStageTab]           = useState("group")
+  const [activeRound, setActiveRound]     = useState("all")
+  const [exporting, setExporting]         = useState(false)
+  const [showExportCard, setShowExportCard] = useState(false)
+  const exportRef = useRef(null)
   const [err, setErr] = useState("")
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading…</p>
@@ -940,16 +1150,63 @@ function FixturesPanel({ tournament }) {
   const isGroupKnockout = tournament.format === "group_knockout"
   const hasFixtures = fixtures.length > 0
 
+  // The fixtures shown in the currently active stage tab
+  const activeFixtures = isGroupKnockout
+    ? (stageTab === "group" ? groupFixtures : knockoutFixtures)
+    : fixtures
+
+  // Fixtures for the selected round (used by export card)
+  const roundFixtures = activeRound === "all"
+    ? []
+    : activeFixtures.filter(f => f.round === Number(activeRound))
+
+  async function handleExport() {
+    if (!exportRef.current || activeRound === "all") return
+    setShowExportCard(true)
+    setExporting(true)
+    await new Promise(r => setTimeout(r, 500))
+    try {
+      const el = exportRef.current
+      const dataUrl = await toPng(el, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "#050810",
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+      })
+      const link = document.createElement("a")
+      link.download = `${tournament.name ?? "Duo"}-Round-${activeRound}-Fixtures.png`
+      link.href = dataUrl
+      link.click()
+    } catch (err) {
+      alert("Export failed: " + err.message)
+    } finally {
+      setExporting(false)
+      setShowExportCard(false)
+    }
+  }
+
   if (isGroupKnockout) {
     return (
       <div className="space-y-4">
+        {/* Hidden export card */}
+        {activeRound !== "all" && (
+          <DuoFixtureExportCard
+            round={activeRound}
+            fixtures={roundFixtures}
+            exportRef={exportRef}
+            visible={showExportCard}
+            tournamentName={tournament.name}
+          />
+        )}
+
         <SectionTitle>Fixtures</SectionTitle>
         <Err msg={err} />
 
         {/* Stage tabs */}
         <div className="flex gap-1 p-1 bg-pitch-900 rounded-xl w-fit">
           {["group", "knockout"].map(s => (
-            <button key={s} onClick={() => setStageTab(s)}
+            <button key={s} onClick={() => { setStageTab(s); setActiveRound("all") }}
               className={cn(
                 "px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize",
                 stageTab === s ? "bg-pitch-800 text-white shadow" : "text-slate-500 hover:text-slate-300"
@@ -961,19 +1218,25 @@ function FixturesPanel({ tournament }) {
 
         {stageTab === "group" && (
           <>
-            {groupFixtures.length === 0 && (
-              <p className="text-xs text-slate-500">Go to the Groups tab to generate group fixtures.</p>
-            )}
-            <FixtureList fixtures={groupFixtures} tournament={tournament} resetFixture={resetFixture} />
+            {groupFixtures.length === 0
+              ? <p className="text-xs text-slate-500">Go to the Groups tab to generate group fixtures.</p>
+              : <>
+                  <RoundFilterBar fixtures={groupFixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} />
+                  <FixtureList fixtures={groupFixtures} tournament={tournament} resetFixture={resetFixture} activeRound={activeRound} />
+                </>
+            }
           </>
         )}
 
         {stageTab === "knockout" && (
           <>
-            {knockoutFixtures.length === 0 && (
-              <p className="text-xs text-slate-500">Go to the Groups tab → Step 3 to generate the knockout bracket after group stage is done.</p>
-            )}
-            <FixtureList fixtures={knockoutFixtures} tournament={tournament} resetFixture={resetFixture} />
+            {knockoutFixtures.length === 0
+              ? <p className="text-xs text-slate-500">Go to the Groups tab → Step 3 to generate the knockout bracket after group stage is done.</p>
+              : <>
+                  <RoundFilterBar fixtures={knockoutFixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} />
+                  <FixtureList fixtures={knockoutFixtures} tournament={tournament} resetFixture={resetFixture} activeRound={activeRound} />
+                </>
+            }
           </>
         )}
 
@@ -991,6 +1254,17 @@ function FixturesPanel({ tournament }) {
   // Standard format (round_robin / knockout)
   return (
     <div className="space-y-4">
+      {/* Hidden export card */}
+      {activeRound !== "all" && (
+        <DuoFixtureExportCard
+          round={activeRound}
+          fixtures={roundFixtures}
+          exportRef={exportRef}
+          visible={showExportCard}
+          tournamentName={tournament.name}
+        />
+      )}
+
       <SectionTitle>Fixtures</SectionTitle>
       <Err msg={err} />
 
@@ -1015,7 +1289,11 @@ function FixturesPanel({ tournament }) {
         )}
       </div>
 
-      <FixtureList fixtures={fixtures} tournament={tournament} resetFixture={resetFixture} />
+      {fixtures.length > 0 && (
+        <RoundFilterBar fixtures={fixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} />
+      )}
+
+      <FixtureList fixtures={fixtures} tournament={tournament} resetFixture={resetFixture} activeRound={activeRound} />
     </div>
   )
 }
