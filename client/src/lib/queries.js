@@ -903,6 +903,19 @@ export const useGenerateDuoFixtures = () => {
   })
 }
 
+export const useCreateDuoKnockoutBracket = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tournamentId, bracket_size, matchups }) =>
+      duoApi.createKnockoutBracket(tournamentId, { bracket_size, matchups }),
+    onSuccess: (_, { tournamentId }) => {
+      qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
+      qc.invalidateQueries({ queryKey: ["duo-tournaments"] })
+    },
+  })
+}
+
 export const useDeleteDuoFixtures = () => {
   const qc = useQueryClient()
   return useMutation({

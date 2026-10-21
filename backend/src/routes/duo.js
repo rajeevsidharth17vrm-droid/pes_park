@@ -701,6 +701,107 @@ router.post("/tournaments/:id/fixtures/generate", authenticate, adminOnly, async
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MANUAL KNOCKOUT BRACKET CREATION
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * POST /api/duo/tournaments/:id/fixtures/create-knockout-bracket
+ * Body: { bracket_size: 4|8|16|32, matchups: [{home_team_id, away_team_id}, ...] }
+ *   bracket_size = number of starting slots (must be a power of 2)
+ *   matchups     = exactly bracket_size/2 pairs for round 1
+ *                  use null for a BYE slot
+ */
+router.post("/tournaments/:id/fixtures/create-knockout-bracket", authenticate, adminOnly, async (req, res) => {
+  try {
+    const tournamentId = req.params.id
+    const { bracket_size, matchups } = req.body
+
+    const validSizes = [4, 8, 16, 32]
+    if (!validSizes.includes(bracket_size))
+      return res.status(400).json({ error: `bracket_size must be one of: ${validSizes.join(", ")}` })
+
+    const expectedPairs = bracket_size / 2
+    if (!Array.isArray(matchups) || matchups.length !== expectedPairs)
+      return res.status(400).json({ error: `Expected ${expectedPairs} matchup pairs for bracket_size=${bracket_size}` })
+
+    const tRes = await query("SELECT * FROM duo_tournaments WHERE id = $1", [tournamentId])
+    if (!tRes.rows.length) return res.status(404).json({ error: "Tournament not found" })
+    const tournament = tRes.rows[0]
+    if (!["knockout", "group_knockout"].includes(tournament.format))
+      return res.status(400).json({ error: "This endpoint is only for knockout or group_knockout format tournaments" })
+
+    // For group_knockout: only check knockout-stage fixtures exist
+    const stageFilter = tournament.format === "group_knockout" ? "knockout" : "main"
+    const existCheck = await query(
+      "SELECT COUNT(*) FROM duo_fixtures WHERE tournament_id = $1 AND stage = $2",
+      [tournamentId, stageFilter]
+    )
+    if (parseInt(existCheck.rows[0].count) > 0)
+      return res.status(400).json({ error: "Knockout fixtures already exist. Delete them first." })
+
+    const totalRounds = Math.log2(bracket_size)
+
+    await withTransaction(async (client) => {
+      // 1. Create all empty fixture slots for every round
+      const fixturesByRound = [] // fixturesByRound[r] = [{id, pos}]
+      for (let r = 1; r <= totalRounds; r++) {
+        const matchCount = bracket_size / Math.pow(2, r)
+        fixturesByRound.push([])
+        for (let pos = 1; pos <= matchCount; pos++) {
+          const ins = await client.query(
+            `INSERT INTO duo_fixtures (tournament_id, round, bracket_position, stage, home_team_id, away_team_id)
+             VALUES ($1, $2, $3, $4, NULL, NULL) RETURNING id`,
+            [tournamentId, r, pos, stageFilter]
+          )
+          fixturesByRound[r - 1].push(ins.rows[0].id)
+        }
+      }
+
+      // 2. Wire next_fixture_id so winners auto-advance
+      for (let r = 0; r < totalRounds - 1; r++) {
+        for (let i = 0; i < fixturesByRound[r].length; i++) {
+          const nextFixId = fixturesByRound[r + 1][Math.floor(i / 2)]
+          await client.query(
+            "UPDATE duo_fixtures SET next_fixture_id = $1 WHERE id = $2",
+            [nextFixId, fixturesByRound[r][i]]
+          )
+        }
+      }
+
+      // 3. Fill round 1 with the provided matchups
+      for (let i = 0; i < matchups.length; i++) {
+        const { home_team_id = null, away_team_id = null } = matchups[i] ?? {}
+        const homeId = home_team_id ?? null
+        const awayId = away_team_id ?? null
+        await client.query(
+          "UPDATE duo_fixtures SET home_team_id = $1, away_team_id = $2 WHERE id = $3",
+          [homeId, awayId, fixturesByRound[0][i]]
+        )
+        // Auto-advance BYE
+        if (homeId && !awayId) {
+          const nextFixId = fixturesByRound[1]?.[Math.floor(i / 2)]
+          if (nextFixId) {
+            const col = i % 2 === 0 ? "home_team_id" : "away_team_id"
+            await client.query(`UPDATE duo_fixtures SET ${col} = $1 WHERE id = $2`, [homeId, nextFixId])
+          }
+          await client.query(
+            "UPDATE duo_fixtures SET status='completed', winner_team_id=$1 WHERE id=$2",
+            [homeId, fixturesByRound[0][i]]
+          )
+        }
+      }
+
+      await client.query("UPDATE duo_tournaments SET status='active' WHERE id=$1", [tournamentId])
+    })
+
+    const fixtures = await query(
+      "SELECT * FROM duo_fixtures WHERE tournament_id=$1 ORDER BY round, bracket_position NULLS LAST, id",
+      [tournamentId]
+    )
+    res.status(201).json({ generated: fixtures.rows.length, fixtures: fixtures.rows })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 // DELETE ALL fixtures
 router.delete("/tournaments/:id/fixtures", authenticate, adminOnly, async (req, res) => {
   try {

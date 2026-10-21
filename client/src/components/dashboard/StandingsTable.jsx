@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { Target, Trophy, Crown, Star } from "lucide-react"
+import { Target, Trophy, Crown, Star, Download } from "lucide-react"
+import { toPng } from "html-to-image"
 import { cn } from "../../lib/utils"
 import { useTopScorers, useTeamLeaguePlayoffs, useFixtures } from "../../lib/queries"
 import { TeamAvatar, TeamLogoIcon } from "../common/TeamLogo"
@@ -70,6 +71,26 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
   const { data: fixtures = [] } = useFixtures()
   const [activeFixtureRound, setActiveFixtureRound] = useState(1)
 
+  // Export
+  const exportRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    if (!exportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = "Auction Tour - Points Table.png"
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Same progressive-unlock rule as UCL fixtures — a round only becomes
   // browsable once every fixture in every round before it is closed.
   const roundsByNumber = fixtures.reduce((acc, f) => {
@@ -88,6 +109,51 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
 
   return (
     <div className="card overflow-hidden">
+      {/* Hidden export card */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 520 }}>
+        <div ref={exportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16 }}>
+            <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>
+              Pes Park · Auction Tour
+            </p>
+            <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Points Table</p>
+          </div>
+          {/* Table header */}
+          <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 28px 28px 28px 28px 28px 28px 28px 36px", gap: 4, padding: "0 4px 8px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            {["#", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts"].map(h => (
+              <span key={h} style={{ color: h === "Pts" ? "#f5a623" : "#64748b", fontSize: 10, fontWeight: 700, textAlign: h === "Team" ? "left" : "center", textTransform: "uppercase", letterSpacing: 1 }}>{h}</span>
+            ))}
+          </div>
+          {/* Rows */}
+          {teams.map((team, i) => {
+            const isFirst = Number(team.position) === 1
+            return (
+              <div key={team.id} style={{
+                display: "grid",
+                gridTemplateColumns: "28px 1fr 28px 28px 28px 28px 28px 28px 28px 36px",
+                gap: 4,
+                padding: "9px 4px",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                background: isFirst ? "rgba(245,166,35,0.06)" : "transparent",
+                alignItems: "center",
+              }}>
+                <span style={{ color: i < 5 ? "#34d399" : "#64748b", fontSize: 12, fontWeight: 600, textAlign: "center" }}>{team.position}</span>
+                <span style={{ color: isFirst ? "#f5a623" : "#e2e8f0", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{team.name}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.played}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.won}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.drawn}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.lost}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.gf}</span>
+                <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.ga}</span>
+                <span style={{ color: team.gd > 0 ? "#34d399" : team.gd < 0 ? "#f87171" : "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.gd > 0 ? `+${team.gd}` : team.gd}</span>
+                <span style={{ color: isFirst ? "#f5a623" : "#ffffff", fontSize: 13, fontWeight: 800, textAlign: "center" }}>{team.points}</span>
+              </div>
+            )
+          })}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 14, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
       {/* Header with dropdown */}
       <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -109,17 +175,28 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
             </h2>
           </div>
         </div>
-        <select
-          value={view}
-          onChange={e => setView(e.target.value)}
-          className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
-        >
-          <option value="table">Points Table</option>
-          <option value="fixtures">Fixtures</option>
-          <option value="playoffs">Playoffs</option>
-          <option value="scorers">Golden Boot</option>
-          <option value="bestplayer">Best Player</option>
-        </select>
+        <div className="flex items-center gap-2">
+          {view === "table" && teams.length > 0 && (
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40">
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? "Exporting…" : "Download"}
+            </button>
+          )}
+          <select
+            value={view}
+            onChange={e => setView(e.target.value)}
+            className="bg-pitch-800 border border-surface-border rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+          >
+            <option value="table">Points Table</option>
+            <option value="fixtures">Fixtures</option>
+            <option value="playoffs">Playoffs</option>
+            <option value="scorers">Golden Boot</option>
+            <option value="bestplayer">Best Player</option>
+          </select>
+        </div>
       </div>
 
       {/* Fixtures — round-by-round results, only revealing a round once
@@ -179,12 +256,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
         )
       )}
 
-      {/* Playoffs — top-5 IPL-style bracket:
-          Qualifier 1 (1st v 2nd) — winner goes straight to the Final.
-          Eliminator (4th v 5th) — loser is eliminated (5th place).
-          Knockout Round (3rd v Eliminator winner) — loser is eliminated (4th place).
-          Qualifier 2 (Qualifier 1 loser v Knockout Round winner) — winner reaches the Final.
-          Final (Qualifier 1 winner v Qualifier 2 winner). */}
+      {/* Playoffs */}
       {view === "playoffs" && (
         !playoffsData?.matches || playoffsData.matches.length === 0 ? (
           <div className="px-5 py-10 text-center">
@@ -208,7 +280,6 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                 </div>
               )}
               <div className="flex flex-col items-center gap-6">
-                {/* Round 1: Qualifier 1 + Eliminator side by side */}
                 <div className="flex flex-wrap items-start justify-center gap-6 w-full">
                   <div className="flex flex-col items-center gap-1.5">
                     <PlayoffMatchCard label="Qualifier 1 · 1st v 2nd" match={q1} />
@@ -219,20 +290,14 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                     <p className="text-[10px] text-slate-600">Winner → Knockout Round · Loser is out (5th)</p>
                   </div>
                 </div>
-
-                {/* Round 2: Knockout Round */}
                 <div className="flex flex-col items-center gap-1.5">
                   <PlayoffMatchCard label="Knockout Round · 3rd v Eliminator winner" match={ko} />
                   <p className="text-[10px] text-slate-600">Winner → Qualifier 2 · Loser is out (4th)</p>
                 </div>
-
-                {/* Round 3: Qualifier 2 */}
                 <div className="flex flex-col items-center gap-1.5">
                   <PlayoffMatchCard label="Qualifier 2" match={q2} />
                   <p className="text-[10px] text-slate-600">Winner → Final · Loser is out (3rd)</p>
                 </div>
-
-                {/* Round 4: Final */}
                 <div className="flex flex-col items-center gap-1.5">
                   <PlayoffMatchCard label="Final" match={final} />
                 </div>
@@ -242,7 +307,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
         })()
       )}
 
-      {/* Auction Tour View */}
+      {/* Auction Tour Points Table */}
       {view === "table" && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -347,14 +412,12 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                     isFirst ? "bg-emerald-400/5 hover:bg-emerald-400/8" : "hover:bg-surface-hover"
                   )}
                 >
-                  {/* Rank */}
                   <div className="w-6 flex-shrink-0 text-center">
                     {isFirst
                       ? <Crown className="w-4 h-4 text-emerald-400 mx-auto" />
                       : <span className="flex items-center gap-0.5"><span className="text-sm font-medium text-slate-500">#{idx + 1}</span><RankBadge change={bpRankChanges[player.id]} /></span>
                     }
                   </div>
-                  {/* Avatar */}
                   {avatarSrc ? (
                     <img src={avatarSrc} alt={player.name} className="w-[43px] h-[43px] rounded-lg object-cover flex-shrink-0" />
                   ) : (
@@ -365,7 +428,6 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                       {player.name.split(" ").map(n => n[0]).join("")}
                     </div>
                   )}
-                  {/* Name + bar */}
                   <div className="flex-1 min-w-0">
                     <span className={cn("font-semibold text-sm truncate block mb-0.5", isFirst ? "text-white" : "text-slate-300")}>
                       {player.name}
@@ -379,7 +441,6 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                       </div>
                     </div>
                   </div>
-                  {/* Points */}
                   <div className="text-right flex-shrink-0">
                     <span className={cn("font-bold text-sm font-mono", isFirst ? "text-emerald-400" : "text-white")}>
                       {player.bestPlayerPoints}

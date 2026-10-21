@@ -700,12 +700,10 @@ export default function CommonDashboard() {
               {/* Panel — only shown on the main competition views */}
               {(["standings", "playoffs", "ucl", "weekly", "quick"].includes(activePanel) || activePanel.startsWith("duo-")) && (() => {
                 // Build duo options from fetched tournaments (active + completed)
-                const duoOptions = duoTournaments
-                  .filter(t => t.status !== "draft")
-                  .map(t => ({
-                    value: `duo-${t.id}`,
-                    label: `Duo · ${t.name}`,
-                  }))
+                const duoOptions = duoTournaments.map(t => ({
+                  value: `duo-${t.id}`,
+                  label: `Duo · ${t.name}`,
+                }))
 
                 const playoffOptions = hasPlayoffs
                   ? [{ value: "playoffs", label: "Auction Tour Playoffs" }]

@@ -1,5 +1,6 @@
-import { useState } from "react"
-import { Trophy, Target, Swords } from "lucide-react"
+import { useState, useRef } from "react"
+import { Trophy, Target, Swords, Download } from "lucide-react"
+import { toPng } from "html-to-image"
 import { useUclStandings, useUclTopScorers, useUclKnockoutCurrent, useUclFixturesPublic } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 import { TeamLogoIcon } from "../common/TeamLogo"
@@ -32,6 +33,26 @@ export default function UclStandings({ onPlayerClick }) {
     `ucl-group-${group?.name ?? "none"}`,
     (group?.players ?? []).map(p => p.id)
   )
+
+  // Export
+  const exportRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    if (!exportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = `${group?.name ?? "Group"} - Points Table.png`
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // A round only "unlocks" once every fixture in every round before it is
   // completed — so admins logging results progressively reveals rounds
@@ -72,6 +93,48 @@ export default function UclStandings({ onPlayerClick }) {
 
   return (
     <div className="card overflow-hidden">
+      {/* Hidden export card — off-screen, captured by toPng */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 480 }}>
+        <div ref={exportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16 }}>
+            <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>
+              Pes Park · Solo Tour
+            </p>
+            <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>{group?.name} — Points Table</p>
+          </div>
+          {/* Table header */}
+          <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 28px 28px 28px 28px 28px 28px 28px 36px", gap: 4, padding: "0 4px 8px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            {["#", "Player", "P", "W", "D", "L", "GF", "GA", "GD", "Pts"].map(h => (
+              <span key={h} style={{ color: h === "Pts" ? "#f5a623" : "#64748b", fontSize: 10, fontWeight: 700, textAlign: h === "Player" ? "left" : "center", textTransform: "uppercase", letterSpacing: 1 }}>{h}</span>
+            ))}
+          </div>
+          {/* Rows */}
+          {(group?.players ?? []).map((p, i) => (
+            <div key={p.id} style={{
+              display: "grid",
+              gridTemplateColumns: "28px 1fr 28px 28px 28px 28px 28px 28px 28px 36px",
+              gap: 4,
+              padding: "9px 4px",
+              borderBottom: "1px solid rgba(255,255,255,0.05)",
+              background: i === 0 ? "rgba(245,166,35,0.06)" : "transparent",
+              alignItems: "center",
+            }}>
+              <span style={{ color: i < 4 ? "#34d399" : "#64748b", fontSize: 12, fontWeight: 600, textAlign: "center" }}>{i + 1}</span>
+              <span style={{ color: i === 0 ? "#f5a623" : "#e2e8f0", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+              <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.played}</span>
+              <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.won}</span>
+              <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.drawn}</span>
+              <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.lost}</span>
+              <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.gf}</span>
+              <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.ga}</span>
+              <span style={{ color: p.gd > 0 ? "#34d399" : p.gd < 0 ? "#f87171" : "#94a3b8", fontSize: 12, textAlign: "center" }}>{p.gd > 0 ? `+${p.gd}` : p.gd}</span>
+              <span style={{ color: i === 0 ? "#f5a623" : "#ffffff", fontSize: 13, fontWeight: 800, textAlign: "center" }}>{p.points}</span>
+            </div>
+          ))}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 14, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
       <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between">
         <div className="flex items-center gap-3">
           <img src={headerIcon} alt="Solo Tour" className="w-9 h-9 object-contain flex-shrink-0" />
@@ -94,7 +157,7 @@ export default function UclStandings({ onPlayerClick }) {
 
       {/* Group tabs — table and fixtures views are both scoped per group */}
       {(view === "table" || view === "fixtures") && (
-        <div className="flex gap-1.5 px-5 py-3 overflow-x-auto border-b border-surface-border/60">
+        <div className="flex items-center gap-1.5 px-5 py-3 border-b border-surface-border/60 overflow-x-auto">
           {groups.map((g, i) => (
             <button key={g.id} onClick={() => setActiveGroup(i)}
               className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
@@ -103,6 +166,18 @@ export default function UclStandings({ onPlayerClick }) {
               {g.name}
             </button>
           ))}
+          {view === "table" && (
+            <>
+              <div className="flex-1" />
+              <button
+                onClick={handleExport}
+                disabled={exporting || !group?.players?.length}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40 whitespace-nowrap flex-shrink-0">
+                <Download className="w-3.5 h-3.5" />
+                {exporting ? "Exporting…" : "Download"}
+              </button>
+            </>
+          )}
         </div>
       )}
 

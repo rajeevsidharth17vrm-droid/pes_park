@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Trophy, CheckCircle, Clock, Trash2 } from "lucide-react"
+import { ArrowLeft, Trophy, CheckCircle, Clock, Trash2, Download } from "lucide-react"
+import { toPng } from "html-to-image"
 import { useWeeklyTournament, useSaveWeeklyResult, useResetWeeklyTournament, useUpdateMatchPlayers, usePlayers } from "../lib/queries"
 import { cn } from "../lib/utils"
 import Confetti from "../components/common/Confetti"
@@ -10,8 +11,8 @@ import PlayerAvatarIcon from "../components/common/PlayerAvatarIcon"
 function getRoundLabel(round, totalRounds) {
   const fromEnd = totalRounds - round
   if (fromEnd === 0) return "Final"
-  if (fromEnd === 1) return "Semi-Final"
-  if (fromEnd === 2) return "Quarter-Final"
+  if (fromEnd === 1) return "Semi Finals"
+  if (fromEnd === 2) return "Quarter Finals"
   if (fromEnd === 3) return "Round of 16"
   if (fromEnd === 4) return "Round of 32"
   if (fromEnd === 5) return "Round of 64"
@@ -238,6 +239,8 @@ export default function WeeklyBracket() {
   const resetTournament = useResetWeeklyTournament()
   const [confirmReset, setConfirmReset] = useState(false)
   const [activeRound, setActiveRound] = useState(1)
+  const exportRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
 
   if (!tournament) return (
     <div className="min-h-screen bg-pitch-900 flex items-center justify-center">
@@ -250,9 +253,66 @@ export default function WeeklyBracket() {
   const currentRound = rounds.includes(activeRound) ? activeRound : rounds[0]
   const roundMatches = matches.filter(m => m.round === currentRound)
   const champion = matches.find(m => m.round === totalRounds && m.status === "completed")?.winnerName
+  const roundLabel = getRoundLabel(currentRound, totalRounds)
+
+  async function handleExport() {
+    if (!exportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = `${tournament.name} - ${roundLabel}.png`
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-pitch-900 p-4 md:p-6">
+      {/* Hidden export card */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 480 }}>
+        <div ref={exportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          {/* Header */}
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16 }}>
+            <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>
+              Pes Park · Weekly Tournament
+            </p>
+            <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: "0 0 2px" }}>{tournament.name}</p>
+            <p style={{ color: "#3b82f6", fontSize: 13, fontWeight: 700, margin: 0 }}>{roundLabel}</p>
+          </div>
+          {/* Matches */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {roundMatches.map((m) => {
+              const p1Win = m.winner_id === m.player1_id
+              const p2Win = m.winner_id === m.player2_id
+              const done  = m.status === "completed"
+              return (
+                <div key={m.id} style={{ background: "#1a2535", borderRadius: 8, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "#475569", fontSize: 10, fontFamily: "monospace", width: 24, flexShrink: 0 }}>#{m.match_number}</span>
+                    <span style={{ flex: 1, color: done && p1Win ? "#34d399" : "#f1f5f9", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {m.player1Name ?? "TBD"}
+                    </span>
+                    <span style={{ color: "#94a3b8", fontSize: 12, fontFamily: "monospace", fontWeight: 700, padding: "2px 8px", background: "#0f1923", borderRadius: 6, flexShrink: 0 }}>
+                      {done ? `${m.player1_score} – ${m.player2_score}` : "vs"}
+                    </span>
+                    <span style={{ flex: 1, color: done && p2Win ? "#34d399" : "#f1f5f9", fontSize: 13, fontWeight: 600, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {m.player2Name ?? "TBD"}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {/* Footer */}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 16, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/admin?tab=weekly")}
@@ -300,18 +360,25 @@ export default function WeeklyBracket() {
       </div>
 
       <div className="card overflow-hidden">
-        {rounds.length > 1 && (
-          <div className="flex gap-1.5 px-5 py-3 overflow-x-auto border-b border-surface-border/60">
-            {rounds.map(r => (
-              <button key={r} onClick={() => setActiveRound(r)}
-                className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
-                  r === currentRound ? "bg-accent text-white" : "bg-pitch-800 text-slate-500 hover:text-white"
-                )}>
-                {getRoundLabel(r, totalRounds)}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Round tabs + download */}
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-surface-border/60 overflow-x-auto">
+          {rounds.map(r => (
+            <button key={r} onClick={() => setActiveRound(r)}
+              className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0",
+                r === currentRound ? "bg-accent text-white" : "bg-pitch-800 text-slate-500 hover:text-white"
+              )}>
+              {getRoundLabel(r, totalRounds)}
+            </button>
+          ))}
+          <div className="flex-1" />
+          <button
+            onClick={handleExport}
+            disabled={exporting || roundMatches.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors flex-shrink-0 disabled:opacity-40">
+            <Download className="w-3.5 h-3.5" />
+            {exporting ? "Exporting…" : `Download ${roundLabel}`}
+          </button>
+        </div>
 
         {roundMatches.length === 0 ? (
           <div className="px-5 py-10 text-center">

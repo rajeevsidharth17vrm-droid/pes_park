@@ -49,6 +49,9 @@ export const duoApi = {
   generateFixtures: (tournamentId) =>
     api.post(`${BASE}/tournaments/${tournamentId}/fixtures/generate`).then(r => r.data),
 
+  createKnockoutBracket: (tournamentId, body) =>
+    api.post(`${BASE}/tournaments/${tournamentId}/fixtures/create-knockout-bracket`, body).then(r => r.data),
+
   deleteFixtures: (tournamentId) =>
     api.delete(`${BASE}/tournaments/${tournamentId}/fixtures`).then(r => r.data),
 

@@ -15,7 +15,7 @@ import {
   useCreateDuoTournament, useDeleteDuoTournament, useUpdateDuoTournament, useCompleteDuoTournament,
   useCreateDuoTeam, useDeleteDuoTeam,
   useAddDuoPlayer, useRemoveDuoPlayer,
-  useGenerateDuoFixtures, useDeleteDuoFixtures,
+  useGenerateDuoFixtures, useDeleteDuoFixtures, useCreateDuoKnockoutBracket,
   useSaveDuoResult, useResetDuoFixture, useSetDuoTiebreaker,
   usePlayers,
   useDrawDuoGroups, useGenerateDuoGroupFixtures, useDuoGroupStandings,
@@ -915,7 +915,8 @@ function TiebreakerForm({ fixture, tournament, onClose }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Duo Fixture Export Card (renders off-screen, captured as PNG)
 // ─────────────────────────────────────────────────────────────────────────────
-function DuoFixtureExportCard({ round, fixtures, exportRef, visible, tournamentName }) {
+function DuoFixtureExportCard({ round, fixtures, exportRef, visible, tournamentName, isKnockout = false, totalRounds = round }) {
+  const roundLabel = isKnockout ? knockoutRoundName(round, totalRounds) : `Round ${round}`
   return (
     <div
       ref={exportRef}
@@ -948,7 +949,7 @@ function DuoFixtureExportCard({ round, fixtures, exportRef, visible, tournamentN
           <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: 0 }}>
             Pes Park · {tournamentName ?? "Duo Tournament"}
           </p>
-          <p style={{ color: "#ffffff", fontSize: 22, fontWeight: 800, margin: 0 }}>Round {round} Fixtures</p>
+          <p style={{ color: "#ffffff", fontSize: 22, fontWeight: 800, margin: 0 }}>{roundLabel} Fixtures</p>
         </div>
       </div>
 
@@ -1097,11 +1098,268 @@ function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Manual Knockout Bracket Builder
+// ─────────────────────────────────────────────────────────────────────────────
+const BRACKET_OPTIONS = [
+  { size: 32, label: "Round of 32", short: "R32" },
+  { size: 16, label: "Round of 16", short: "R16" },
+  { size: 8,  label: "Quarter Finals", short: "QF" },
+  { size: 4,  label: "Semi Finals", short: "SF" },
+]
+
+function KnockoutBracketBuilder({ tournament, onCreated }) {
+  const teams = tournament.teams ?? []
+  const createBracket = useCreateDuoKnockoutBracket()
+
+  const [bracketSize, setBracketSize] = useState(null)   // 4 | 8 | 16 | 32
+  const [matchups, setMatchups]       = useState([])     // [{home_team_id, away_team_id}]
+  const [err, setErr]                 = useState("")
+
+  function selectSize(size) {
+    setBracketSize(size)
+    setMatchups(Array.from({ length: size / 2 }, () => ({ home_team_id: "", away_team_id: "" })))
+    setErr("")
+  }
+
+  function setSlot(matchIdx, side, teamId) {
+    setMatchups(prev => {
+      const next = [...prev]
+      next[matchIdx] = { ...next[matchIdx], [side]: teamId }
+      return next
+    })
+  }
+
+  // Returns set of team IDs used in any slot OTHER THAN (excludeMatch, excludeSide)
+  function usedIds(excludeMatch, excludeSide) {
+    const used = new Set()
+    matchups.forEach((m, mi) => {
+      if (!(mi === excludeMatch && excludeSide === "home_team_id") && m.home_team_id) used.add(m.home_team_id)
+      if (!(mi === excludeMatch && excludeSide === "away_team_id") && m.away_team_id) used.add(m.away_team_id)
+    })
+    return used
+  }
+
+  async function handleSave() {
+    setErr("")
+    // Validate: every slot must have at least one team (BYE = only home set, away empty is fine)
+    for (let i = 0; i < matchups.length; i++) {
+      if (!matchups[i].home_team_id) {
+        setErr(`Match ${i + 1}: please assign at least the home team (or leave both empty to skip the slot entirely).`)
+        return
+      }
+    }
+    try {
+      await createBracket.mutateAsync({
+        tournamentId: tournament.id,
+        bracket_size: bracketSize,
+        matchups: matchups.map(m => ({
+          home_team_id: m.home_team_id ? Number(m.home_team_id) : null,
+          away_team_id: m.away_team_id ? Number(m.away_team_id) : null,
+        })),
+      })
+      onCreated?.()
+    } catch (e) {
+      setErr(e.response?.data?.error ?? e.message)
+    }
+  }
+
+  // ── Step 1: pick bracket size
+  if (!bracketSize) {
+    return (
+      <div className="space-y-3">
+        <SectionTitle>Create Knockout Bracket</SectionTitle>
+        <p className="text-xs text-slate-400">Choose the starting round:</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {BRACKET_OPTIONS.map(opt => (
+            <button key={opt.size} onClick={() => selectSize(opt.size)}
+              className="flex flex-col items-center gap-1 p-4 rounded-xl bg-pitch-800 border border-surface-border hover:border-accent/40 hover:bg-pitch-700 transition-colors group">
+              <span className="text-xl font-black text-accent group-hover:scale-110 transition-transform">{opt.short}</span>
+              <span className="text-[10px] text-slate-400">{opt.label}</span>
+              <span className="text-[10px] text-slate-600">{opt.size / 2} matches</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Step 2: assign teams to match slots
+  const matchCount = bracketSize / 2
+  const opt = BRACKET_OPTIONS.find(o => o.size === bracketSize)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <SectionTitle>{opt.label} Draw</SectionTitle>
+        <button onClick={() => { setBracketSize(null); setMatchups([]) }}
+          className="text-xs text-slate-500 hover:text-slate-300 ml-auto">← Change round</button>
+      </div>
+      <p className="text-xs text-slate-400">
+        Assign teams to each match. Leave the Away slot empty for a BYE (the home team auto-advances).
+      </p>
+      <Err msg={err} />
+
+      <div className="space-y-2">
+        {matchups.map((m, i) => {
+          const homeUsed = usedIds(i, "home_team_id")
+          const awayUsed = usedIds(i, "away_team_id")
+          return (
+            <div key={i} className="flex items-center gap-2 p-3 bg-pitch-800 border border-surface-border rounded-xl">
+              <span className="text-[10px] text-slate-500 font-bold w-6 shrink-0">M{i + 1}</span>
+
+              {/* Home team */}
+              <select
+                value={m.home_team_id}
+                onChange={e => setSlot(i, "home_team_id", e.target.value)}
+                className="flex-1 bg-pitch-900 border border-surface-border rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 min-w-0">
+                <option value="">— Home team —</option>
+                {teams.filter(t => !homeUsed.has(String(t.id)) || m.home_team_id === String(t.id)).map(t => (
+                  <option key={t.id} value={String(t.id)}>{t.name}</option>
+                ))}
+              </select>
+
+              <span className="text-slate-600 font-bold text-xs shrink-0">vs</span>
+
+              {/* Away team */}
+              <select
+                value={m.away_team_id}
+                onChange={e => setSlot(i, "away_team_id", e.target.value)}
+                className="flex-1 bg-pitch-900 border border-surface-border rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 min-w-0">
+                <option value="">— BYE / Away —</option>
+                {teams.filter(t => !awayUsed.has(String(t.id)) || m.away_team_id === String(t.id)).map(t => (
+                  <option key={t.id} value={String(t.id)}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center gap-3 pt-2">
+        <button onClick={handleSave} disabled={createBracket.isPending}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-pitch-950 text-sm font-bold hover:bg-accent/90 disabled:opacity-50 transition-colors">
+          <Trophy className="w-4 h-4" />
+          {createBracket.isPending ? "Creating…" : `Create ${opt.short} Bracket`}
+        </button>
+        <p className="text-xs text-slate-500">{matchCount} matches · winners auto-advance each round</p>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Knockout Tab Panel — auto-seed or manual draw
+// ─────────────────────────────────────────────────────────────────────────────
+function KnockoutTabPanel({ tournament, onCreated }) {
+  const isGroupKnockout = tournament.format === "group_knockout"
+  const [mode, setMode] = useState(null)  // null | "auto" | "manual"
+
+  // Auto-generate state
+  const genKnockout = useGenerateDuoKnockout()
+  const { data: knockoutFixtures = [] } = useDuoFixturesByStage(tournament.id, "knockout")
+  const { data: groupFixtures    = [] } = useDuoFixturesByStage(tournament.id, "group")
+  const [advancePerGroup, setAdvancePerGroup] = useState(2)
+  const [err, setErr] = useState("")
+
+  const allGroupDone = groupFixtures.length > 0 && groupFixtures.every(f => f.status === "completed")
+  const hasKnockout  = knockoutFixtures.length > 0
+
+  // Pure knockout — just show builder directly
+  if (!isGroupKnockout) {
+    return <KnockoutBracketBuilder tournament={tournament} onCreated={onCreated} />
+  }
+
+  // Already has knockout fixtures — show info
+  if (hasKnockout) {
+    return (
+      <div className="space-y-3">
+        <SectionTitle>Knockout Bracket</SectionTitle>
+        <p className="text-sm text-green-400">✓ Knockout bracket already created ({knockoutFixtures.length} fixtures). View it in the <strong>Fixtures</strong> tab.</p>
+      </div>
+    )
+  }
+
+  // Mode picker for group_knockout
+  if (!mode) {
+    return (
+      <div className="space-y-4">
+        <SectionTitle>Create Knockout Bracket</SectionTitle>
+        {!allGroupDone && (
+          <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400">
+            ⚠ Group stage is not fully completed yet. Auto-seed may be incomplete.
+          </div>
+        )}
+        <p className="text-xs text-slate-400">How would you like to set up the knockout bracket?</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button onClick={() => setMode("auto")}
+            className="flex flex-col items-start gap-2 p-4 rounded-xl bg-pitch-800 border border-surface-border hover:border-accent/40 hover:bg-pitch-700 transition-colors text-left">
+            <span className="text-sm font-bold text-accent">⚡ Auto Seed</span>
+            <span className="text-xs text-slate-400">Automatically seed teams from group standings (top N per group advance).</span>
+          </button>
+          <button onClick={() => setMode("manual")}
+            className="flex flex-col items-start gap-2 p-4 rounded-xl bg-pitch-800 border border-surface-border hover:border-accent/40 hover:bg-pitch-700 transition-colors text-left">
+            <span className="text-sm font-bold text-white">✋ Manual Draw</span>
+            <span className="text-xs text-slate-400">Manually pick which teams go into each match slot.</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === "auto") {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <SectionTitle>Auto Seed Knockout</SectionTitle>
+          <button onClick={() => setMode(null)} className="text-xs text-slate-500 hover:text-slate-300 ml-auto">← Back</button>
+        </div>
+        <Err msg={err} />
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-slate-400 shrink-0">Teams advancing per group:</label>
+          <select value={advancePerGroup} onChange={e => setAdvancePerGroup(Number(e.target.value))}
+            className="bg-pitch-800 border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40">
+            {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <button
+          onClick={() => genKnockout.mutate({ tournamentId: tournament.id, advance_per_group: advancePerGroup }, {
+            onSuccess: () => onCreated?.(),
+            onError: e => setErr(e.response?.data?.error ?? e.message),
+          })}
+          disabled={genKnockout.isPending}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-pitch-950 text-sm font-bold hover:bg-accent/90 disabled:opacity-50 transition-colors">
+          <Trophy className="w-4 h-4" />
+          {genKnockout.isPending ? "Generating…" : "Generate Knockout Bracket"}
+        </button>
+      </div>
+    )
+  }
+
+  // mode === "manual"
+  return <KnockoutBracketBuilder tournament={tournament} onCreated={onCreated} />
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Knockout round name helper
+// ─────────────────────────────────────────────────────────────────────────────
+function knockoutRoundName(round, totalRounds) {
+  const fromEnd = totalRounds - round
+  if (fromEnd === 0) return "Final"
+  if (fromEnd === 1) return "Semi Finals"
+  if (fromEnd === 2) return "Quarter Finals"
+  const teams = Math.pow(2, fromEnd + 1)
+  return `Round of ${teams}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Round filter + export bar (shared by all fixture sections)
 // ─────────────────────────────────────────────────────────────────────────────
-function RoundFilterBar({ fixtures, activeRound, setActiveRound, onExport, exporting }) {
+function RoundFilterBar({ fixtures, activeRound, setActiveRound, onExport, exporting, isKnockout = false }) {
   const rounds = [...new Set(fixtures.map(f => f.round))].filter(Boolean).sort((a, b) => a - b)
   if (rounds.length === 0) return null
+  const totalRounds = Math.max(...rounds)
+  const label = r => isKnockout ? knockoutRoundName(r, totalRounds) : `Round ${r}`
+  const activeLabel = activeRound !== "all" ? label(activeRound) : ""
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1 bg-pitch-800 border border-surface-border rounded-xl p-1 overflow-x-auto">
@@ -1113,14 +1371,14 @@ function RoundFilterBar({ fixtures, activeRound, setActiveRound, onExport, expor
           <button key={r} onClick={() => setActiveRound(r)}
             className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
               activeRound === r ? "bg-surface text-white border border-surface-border" : "text-slate-500 hover:text-white"
-            )}>Round {r}</button>
+            )}>{label(r)}</button>
         ))}
       </div>
       {activeRound !== "all" && (
         <button onClick={onExport} disabled={exporting}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent/15 text-accent border border-accent/25 text-xs font-semibold hover:bg-accent/25 transition-colors disabled:opacity-50">
           <Download className="w-3.5 h-3.5" />
-          {exporting ? "Exporting…" : `Download Round ${activeRound}`}
+          {exporting ? "Exporting…" : `Download ${activeLabel}`}
         </button>
       )}
     </div>
@@ -1160,6 +1418,10 @@ function FixturesPanel({ tournament }) {
     ? []
     : activeFixtures.filter(f => f.round === Number(activeRound))
 
+  const isKnockoutStage = tournament.format === "knockout" || (isGroupKnockout && stageTab === "knockout")
+  const allRounds = [...new Set(activeFixtures.map(f => f.round))].filter(Boolean)
+  const totalRounds = allRounds.length > 0 ? Math.max(...allRounds) : 1
+
   async function handleExport() {
     if (!exportRef.current || activeRound === "all") return
     setShowExportCard(true)
@@ -1197,6 +1459,8 @@ function FixturesPanel({ tournament }) {
             exportRef={exportRef}
             visible={showExportCard}
             tournamentName={tournament.name}
+            isKnockout={isKnockoutStage}
+            totalRounds={totalRounds}
           />
         )}
 
@@ -1221,7 +1485,7 @@ function FixturesPanel({ tournament }) {
             {groupFixtures.length === 0
               ? <p className="text-xs text-slate-500">Go to the Groups tab to generate group fixtures.</p>
               : <>
-                  <RoundFilterBar fixtures={groupFixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} />
+                  <RoundFilterBar fixtures={groupFixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} isKnockout={false} />
                   <FixtureList fixtures={groupFixtures} tournament={tournament} resetFixture={resetFixture} activeRound={activeRound} />
                 </>
             }
@@ -1231,9 +1495,9 @@ function FixturesPanel({ tournament }) {
         {stageTab === "knockout" && (
           <>
             {knockoutFixtures.length === 0
-              ? <p className="text-xs text-slate-500">Go to the Groups tab → Step 3 to generate the knockout bracket after group stage is done.</p>
+              ? <p className="text-xs text-slate-500">No knockout fixtures yet — go to the <strong className="text-white">Knockout</strong> tab to create the bracket.</p>
               : <>
-                  <RoundFilterBar fixtures={knockoutFixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} />
+                  <RoundFilterBar fixtures={knockoutFixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} isKnockout={true} />
                   <FixtureList fixtures={knockoutFixtures} tournament={tournament} resetFixture={resetFixture} activeRound={activeRound} />
                 </>
             }
@@ -1262,14 +1526,17 @@ function FixturesPanel({ tournament }) {
           exportRef={exportRef}
           visible={showExportCard}
           tournamentName={tournament.name}
+          isKnockout={isKnockoutStage}
+          totalRounds={totalRounds}
         />
       )}
 
       <SectionTitle>Fixtures</SectionTitle>
       <Err msg={err} />
 
-      <div className="flex gap-2 flex-wrap">
-        {!hasFixtures && (
+      {/* Round robin: auto-generate button */}
+      {tournament.format === "round_robin" && !hasFixtures && (
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => generateFixtures.mutate(tournament.id, {
               onError: e => setErr(e.response?.data?.error ?? e.message),
@@ -1279,18 +1546,21 @@ function FixturesPanel({ tournament }) {
             <ListOrdered className="w-4 h-4" />
             {generateFixtures.isPending ? "Generating…" : "Generate Fixtures"}
           </button>
-        )}
-        {hasFixtures && (
+        </div>
+      )}
+
+      {hasFixtures && (
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => { if (confirm("Delete all fixtures and reset to draft?")) deleteFixtures.mutate(tournament.id) }}
             className="flex items-center gap-1 px-3 py-2 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 transition-colors">
             <Trash2 className="w-3.5 h-3.5" /> Reset Fixtures
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {fixtures.length > 0 && (
-        <RoundFilterBar fixtures={fixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} />
+        <RoundFilterBar fixtures={fixtures} activeRound={activeRound} setActiveRound={setActiveRound} onExport={handleExport} exporting={exporting} isKnockout={isKnockoutStage} />
       )}
 
       <FixtureList fixtures={fixtures} tournament={tournament} resetFixture={resetFixture} activeRound={activeRound} />
@@ -1404,9 +1674,12 @@ function TournamentDetail({ tournamentId, onBack }) {
   )
 
   const isGroupKnockout = tournament.format === "group_knockout"
+  const isKnockout      = tournament.format === "knockout"
   const INNER_TABS = isGroupKnockout
-    ? ["Teams", "Groups", "Fixtures", "Standings"]
-    : ["Teams", "Fixtures", "Standings"]
+    ? ["Teams", "Groups", "Fixtures", "Knockout", "Standings"]
+    : isKnockout
+      ? ["Teams", "Knockout", "Fixtures", "Standings"]
+      : ["Teams", "Fixtures", "Standings"]
 
   return (
     <div className="space-y-4">
@@ -1447,6 +1720,7 @@ function TournamentDetail({ tournamentId, onBack }) {
 
       {tab === "Teams"     && <TeamManager tournament={tournament} />}
       {tab === "Groups"    && isGroupKnockout && <GroupDrawPanel tournament={tournament} />}
+      {tab === "Knockout"  && (isKnockout || isGroupKnockout) && <KnockoutTabPanel tournament={tournament} onCreated={() => setTab("Fixtures")} />}
       {tab === "Fixtures"  && <FixturesPanel tournament={tournament} />}
       {tab === "Standings" && <StandingsPanel tournamentId={tournament.id} />}
     </div>
