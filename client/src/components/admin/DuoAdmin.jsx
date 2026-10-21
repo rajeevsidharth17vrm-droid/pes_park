@@ -6,7 +6,7 @@
 import { useState, useMemo, useRef } from "react"
 import {
   Plus, Trash2, ChevronRight, Users, Trophy, RefreshCw,
-  CheckCircle, AlertCircle, X, Shield, ListOrdered, Shuffle, Settings2, Download
+  CheckCircle, AlertCircle, X, Shield, ListOrdered, Shuffle, Settings2, Download, Pencil
 } from "lucide-react"
 import { toPng } from "html-to-image"
 import logoUrl from "../../../images/logo.png"
@@ -715,22 +715,31 @@ function GroupDrawPanel({ tournament }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Result Entry Form (for a single fixture)
 // ─────────────────────────────────────────────────────────────────────────────
-function ResultForm({ fixture, tournament, onClose }) {
+function ResultForm({ fixture, tournament, onClose, initialMatchups }) {
   const saveResult = useSaveDuoResult()
 
-  // Build initial matchup state from team players
+  // Build initial matchup state from team players (or pre-filled edit data)
   const homeTeam = tournament.teams?.find(t => t.id === fixture.home_team_id)
   const awayTeam = tournament.teams?.find(t => t.id === fixture.away_team_id)
 
-  const [matchups, setMatchups] = useState(() =>
-    Array.from({ length: tournament.team_size }, (_, i) => ({
+  const [matchups, setMatchups] = useState(() => {
+    if (initialMatchups?.length > 0) {
+      return initialMatchups.map(m => ({
+        slot: m.slot,
+        home_player_id: m.home_player_id ?? null,
+        away_player_id: m.away_player_id ?? null,
+        home_score: m.home_score ?? 0,
+        away_score: m.away_score ?? 0,
+      }))
+    }
+    return Array.from({ length: tournament.team_size }, (_, i) => ({
       slot: i + 1,
       home_player_id: homeTeam?.players?.[i]?.player_id ?? null,
       away_player_id: awayTeam?.players?.[i]?.player_id ?? null,
       home_score: 0,
       away_score: 0,
     }))
-  )
+  })
   const [err, setErr] = useState("")
 
   function updateMatchup(idx, key, val) {
@@ -997,6 +1006,9 @@ function DuoFixtureExportCard({ round, fixtures, exportRef, visible, tournamentN
 function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
   const [enteringResult, setEnteringResult] = useState(null)
   const [enteringTb, setEnteringTb] = useState(null)
+  const [editingFixtureId, setEditingFixtureId] = useState(null)
+  const [editingInitialData, setEditingInitialData] = useState(null)
+  const [editResetting, setEditResetting] = useState(null)  // fixtureId being reset before edit
 
   const displayFixtures = activeRound === "all" || activeRound == null
     ? fixtures
@@ -1018,6 +1030,8 @@ function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
             const isEnteringResult = enteringResult === f.id
             const isEnteringTb     = enteringTb === f.id
             const completed = f.status === "completed"
+
+            const isEditing = editingFixtureId === f.id
 
             return (
               <div key={f.id} className="space-y-2">
@@ -1057,30 +1071,64 @@ function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {!completed && !f.is_tiebreaker_needed && f.home_team_id && f.away_team_id && (
-                      <button onClick={() => { setEnteringResult(isEnteringResult ? null : f.id); setEnteringTb(null) }}
+                      <button onClick={() => { setEnteringResult(isEnteringResult ? null : f.id); setEnteringTb(null); setEditingFixtureId(null) }}
                         className="px-2 py-1 rounded-lg bg-accent/15 border border-accent/30 text-accent text-xs hover:bg-accent/20 transition-colors">
                         Enter Result
                       </button>
                     )}
                     {f.is_tiebreaker_needed && (
-                      <button onClick={() => { setEnteringTb(isEnteringTb ? null : f.id); setEnteringResult(null) }}
+                      <button onClick={() => { setEnteringTb(isEnteringTb ? null : f.id); setEnteringResult(null); setEditingFixtureId(null) }}
                         className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors">
                         Tiebreaker
                       </button>
                     )}
                     {completed && (
-                      <button
-                        onClick={() => { if (confirm("Reset this result?")) resetFixture.mutate({ fixtureId: f.id, tournamentId: tournament.id }) }}
-                        className="p-1 rounded hover:bg-pitch-800 text-slate-500 hover:text-slate-300 transition-colors"
-                        title="Reset result">
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
+                      <>
+                        {/* Edit result */}
+                        <button
+                          disabled={editResetting === f.id}
+                          onClick={async () => {
+                            if (isEditing) { setEditingFixtureId(null); setEditingInitialData(null); return }
+                            setEnteringResult(null); setEnteringTb(null)
+                            setEditResetting(f.id)
+                            try {
+                              await resetFixture.mutateAsync({ fixtureId: f.id, tournamentId: tournament.id })
+                              setEditingInitialData(f.match_records ?? [])
+                              setEditingFixtureId(f.id)
+                            } finally {
+                              setEditResetting(null)
+                            }
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 text-xs hover:bg-sky-500/20 transition-colors disabled:opacity-50"
+                          title="Edit result">
+                          {editResetting === f.id
+                            ? <RefreshCw className="w-3 h-3 animate-spin" />
+                            : <Pencil className="w-3 h-3" />
+                          }
+                          <span>{isEditing ? "Cancel" : "Edit"}</span>
+                        </button>
+                        {/* Full reset */}
+                        <button
+                          onClick={() => { if (confirm("Reset this result?")) resetFixture.mutate({ fixtureId: f.id, tournamentId: tournament.id }) }}
+                          className="p-1 rounded hover:bg-pitch-800 text-slate-500 hover:text-slate-300 transition-colors"
+                          title="Reset result">
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
 
                 {isEnteringResult && (
                   <ResultForm fixture={f} tournament={tournament} onClose={() => setEnteringResult(null)} />
+                )}
+                {isEditing && (
+                  <ResultForm
+                    fixture={f}
+                    tournament={tournament}
+                    initialMatchups={editingInitialData}
+                    onClose={() => { setEditingFixtureId(null); setEditingInitialData(null) }}
+                  />
                 )}
                 {isEnteringTb && (
                   <TiebreakerForm fixture={f} tournament={tournament} onClose={() => setEnteringTb(null)} />
