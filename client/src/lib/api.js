@@ -184,6 +184,45 @@ export const favoritesApi = {
   add:    (playerId) => api.post(`/favorites/${playerId}`).then(r => r.data),
   remove: (playerId) => api.delete(`/favorites/${playerId}`).then(r => r.data),
 }
+export const wctApi = {
+  // Tournaments
+  list:             ()              => api.get("/wct").then(r => r.data),
+  create:           (name)          => api.post("/wct", { name }).then(r => r.data),
+  update:           (id, body)      => api.patch(`/wct/${id}`, body).then(r => r.data),
+  remove:           (id)            => api.delete(`/wct/${id}`).then(r => r.data),
+  // Teams
+  teams:            (id)            => api.get(`/wct/${id}/teams`).then(r => r.data),
+  addTeam:          (id, body)      => api.post(`/wct/${id}/teams`, body).then(r => r.data),
+  editTeam:         (id, tid, body) => api.patch(`/wct/${id}/teams/${tid}`, body).then(r => r.data),
+  deleteTeam:       (id, tid)       => api.delete(`/wct/${id}/teams/${tid}`).then(r => r.data),
+  // Players
+  addPlayer:        (id, tid, body) => api.post(`/wct/${id}/teams/${tid}/players`, body).then(r => r.data),
+  editPlayer:       (pid, body)     => api.patch(`/wct/players/${pid}`, body).then(r => r.data),
+  deletePlayer:     (pid)           => api.delete(`/wct/players/${pid}`).then(r => r.data),
+  // Group fixtures
+  generateFixtures: (id)            => api.post(`/wct/${id}/generate-fixtures`).then(r => r.data),
+  groupFixtures:    (id)            => api.get(`/wct/${id}/group-fixtures`).then(r => r.data),
+  saveGroupResult:  (id, fid, body) => api.patch(`/wct/${id}/group-fixtures/${fid}`, body).then(r => r.data),
+  clearGroupResult: (id, fid)       => api.delete(`/wct/${id}/group-fixtures/${fid}/result`).then(r => r.data),
+  fixtureStats:     (id, fid)       => api.get(`/wct/${id}/group-fixtures/${fid}/stats`).then(r => r.data),
+  // Standings & top scorers
+  standings:        (id)            => api.get(`/wct/${id}/standings`).then(r => r.data),
+  topScorers:       (id)            => api.get(`/wct/${id}/top-scorers`).then(r => r.data),
+  // Qualification
+  qualified:        (id)            => api.get(`/wct/${id}/qualified`).then(r => r.data),
+  qualify:          (id, body)      => api.post(`/wct/${id}/qualified`, body).then(r => r.data),
+  unqualify:        (id, tid)       => api.delete(`/wct/${id}/qualified/${tid}`).then(r => r.data),
+  // Knockout
+  knockout:         (id)            => api.get(`/wct/${id}/knockout`).then(r => r.data),
+  generateKnockout: (id, body)      => api.post(`/wct/${id}/generate-knockout`, body).then(r => r.data),
+  addKOFixture:     (id, body)      => api.post(`/wct/${id}/knockout`, body).then(r => r.data),
+  updateKOFixture:  (id, fid, body) => api.patch(`/wct/${id}/knockout/${fid}`, body).then(r => r.data),
+  clearKOResult:    (id, fid)       => api.delete(`/wct/${id}/knockout/${fid}/result`).then(r => r.data),
+  deleteKOFixture:  (id, fid)       => api.delete(`/wct/${id}/knockout/${fid}`).then(r => r.data),
+  deleteKORound:    (id, round)     => api.delete(`/wct/${id}/knockout?round=${round}`).then(r => r.data),
+  koStats:          (id, fid)       => api.get(`/wct/${id}/knockout/${fid}/stats`).then(r => r.data),
+}
+
 export const uclKnockoutApi = {
   list:         ()             => api.get("/ucl-knockout").then(r => r.data),
   get:          (id)           => api.get(`/ucl-knockout/${id}`).then(r => r.data),

@@ -13,6 +13,7 @@ import UclStandings from "../components/dashboard/UclStandings"
 import WeeklyDashboard from "../components/dashboard/WeeklyDashboard"
 import QuickTournamentDashboard from "../components/dashboard/QuickTournamentDashboard"
 import DuoDashboard from "../components/dashboard/DuoDashboard"
+import WCTDashboard from "../components/dashboard/WCTDashboard"
 import PlayersDirectory from "../components/dashboard/PlayersDirectory"
 import PastSeasonDashboard from "../components/dashboard/PastSeasonDashboard"
 import PlayerComparison from "../components/dashboard/PlayerComparison"
@@ -25,6 +26,8 @@ import uclTrophyLogo from "../../images/ucl.png"
 import qtTrophyLogo  from "../../images/qt.png"
 import goldenBootLogo from "../../images/Golden Boot.png"
 import { useTeams, usePlayers, useSeasonRecords, useSettings, useWeeklyCurrent, useQuickTournamentCurrent, useFixtures, useUclKnockoutCurrent, useTopScorers, useUclTopScorers, useWeeklyTopScorers, useQuickTournamentTopScorers, useBestLeaguePerformer, useTeamLeaguePlayoffs, useDuoTournaments } from "../lib/queries"
+import { wctApi } from "../lib/api"
+import { useQuery } from "@tanstack/react-query"
 
 // Resolves a player's chosen avatar — custom upload takes priority,
 // falls back to their picked preset character, then to nothing at all.
@@ -168,6 +171,7 @@ export default function CommonDashboard() {
   const { data: weeklyTopScorers = [] }                   = useWeeklyTopScorers()
   const { data: quickTopScorers = [] }                    = useQuickTournamentTopScorers()
   const { data: duoTournaments = [] }                     = useDuoTournaments()
+  const { data: wctTournaments = [] }                     = useQuery({ queryKey: ["wct","tournaments"], queryFn: wctApi.list })
 
   const urlParams = new URLSearchParams(window.location.search)
 
@@ -698,11 +702,15 @@ export default function CommonDashboard() {
               </div>
 
               {/* Panel — only shown on the main competition views */}
-              {(["standings", "playoffs", "ucl", "weekly", "quick"].includes(activePanel) || activePanel.startsWith("duo-")) && (() => {
+              {(["standings", "playoffs", "ucl", "weekly", "quick"].includes(activePanel) || activePanel.startsWith("duo-") || activePanel.startsWith("wct-")) && (() => {
                 // Build duo options from fetched tournaments (active + completed)
                 const duoOptions = duoTournaments.map(t => ({
                   value: `duo-${t.id}`,
                   label: `Duo · ${t.name}`,
+                }))
+                const wctOptions = wctTournaments.map(t => ({
+                  value: `wct-${t.id}`,
+                  label: `WCT · ${t.name}`,
                 }))
 
                 const playoffOptions = hasPlayoffs
@@ -714,6 +722,7 @@ export default function CommonDashboard() {
                   ...playoffOptions,
                   ...BASE_PANEL_OPTIONS.slice(1), // Solo Tour, Weekend Series, Quick Tournament
                   ...duoOptions,               // one entry per Duo tournament
+                  ...wctOptions,               // one entry per WCT tournament
                 ]
 
                 return (
@@ -745,6 +754,9 @@ export default function CommonDashboard() {
                 {activePanel === "quick"     && <QuickTournamentDashboard onPlayerClick={handlePlayer} />}
                 {activePanel.startsWith("duo-") && (
                   <DuoDashboard tournamentId={parseInt(activePanel.replace("duo-", ""), 10)} />
+                )}
+                {activePanel.startsWith("wct-") && (
+                  <WCTDashboard tournamentId={parseInt(activePanel.replace("wct-", ""), 10)} />
                 )}
                 {activePanel === "bdr"       && <BDRRanking players={players} onPlayerClick={handlePlayer} />}
                 {activePanel === "bestplayer" && <BestPlayerRanking players={players} onPlayerClick={handlePlayer} />}

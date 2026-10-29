@@ -16,6 +16,7 @@ import weeklyRoutes      from "./routes/weekly.js"
 import quickTournamentRoutes from "./routes/quickTournament.js"
 import uclKnockoutRoutes from "./routes/uclKnockout.js"
 import duoRoutes         from "./routes/duo.js"
+import wctRoutes         from "./routes/wct.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 
 const app  = express()
@@ -73,6 +74,7 @@ app.use("/api/weekly",       weeklyRoutes)
 app.use("/api/quick-tournament", quickTournamentRoutes)
 app.use("/api/ucl-knockout", uclKnockoutRoutes)
 app.use("/api/duo",          duoRoutes)
+app.use("/api/wct",          wctRoutes)
 
 // GET /api/settings — public app settings (current season etc.)
 app.get("/api/settings", async (_req, res) => {
