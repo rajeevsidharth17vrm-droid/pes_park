@@ -21,6 +21,26 @@ import goldenBootLogo from "../../../images/Golden Boot.png"
 
 const GROUP_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+// Compute Leg 1 / Leg 2 for double round-robin fixtures
+function computeLegNumbers(fixtures) {
+  const pairMap = {}
+  const sorted = [...fixtures].sort((a, b) => (a.round ?? 0) - (b.round ?? 0))
+  sorted.forEach(f => {
+    if (!f.home_team_id || !f.away_team_id) return
+    const key = [Math.min(f.home_team_id, f.away_team_id), Math.max(f.home_team_id, f.away_team_id)].join("-")
+    if (!pairMap[key]) pairMap[key] = []
+    pairMap[key].push(f.id)
+  })
+  const legMap = {}
+  Object.values(pairMap).forEach(ids => {
+    if (ids.length >= 2) {
+      legMap[ids[0]] = 1
+      legMap[ids[1]] = 2
+    }
+  })
+  return legMap
+}
+
 function getRoundLabel(round, totalRounds) {
   const fromEnd = totalRounds - round
   if (fromEnd === 0) return "Final"
@@ -30,7 +50,7 @@ function getRoundLabel(round, totalRounds) {
   return `Round ${round}`
 }
 
-function FixtureRow({ fixture: f, teamSize }) {
+function FixtureRow({ fixture: f, teamSize, legNumber }) {
   const [expanded, setExpanded] = useState(false)
   const completed = f.status === "completed"
 
@@ -43,6 +63,16 @@ function FixtureRow({ fixture: f, teamSize }) {
         <div className={cn("w-2 h-2 rounded-full shrink-0 mr-3",
           completed ? "bg-emerald-400" : f.is_tiebreaker_needed ? "bg-amber-400 animate-pulse" : "bg-slate-600"
         )} />
+        {legNumber && (
+          <span className={cn(
+            "text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide mr-2 shrink-0",
+            legNumber === 1
+              ? "bg-sky-500/15 text-sky-400 border border-sky-500/25"
+              : "bg-violet-500/15 text-violet-400 border border-violet-500/25"
+          )}>
+            L{legNumber}
+          </span>
+        )}
         <span className={cn("flex-1 text-sm font-medium truncate",
           f.winner_team_id === f.home_team_id ? "text-white" : completed ? "text-slate-400" : "text-slate-300"
         )}>
@@ -144,6 +174,7 @@ function GroupStageView({ tournament, fixtures }) {
   const rounds = [...new Set(fixtures.map(f => f.round))].sort((a, b) => a - b)
   const [activeRound, setActiveRound] = useState(rounds[0] ?? 1)
   const roundFixtures = fixtures.filter(f => f.round === activeRound)
+  const legNumbers = useMemo(() => computeLegNumbers(fixtures), [fixtures])
 
   const exportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
@@ -200,7 +231,7 @@ function GroupStageView({ tournament, fixtures }) {
           <div className="divide-y divide-surface-border/40">
             {roundFixtures.length === 0
               ? <p className="text-sm text-slate-500 px-5 py-6">No fixtures in this round.</p>
-              : roundFixtures.map(f => <FixtureRow key={f.id} fixture={f} teamSize={tournament.team_size} />)
+              : roundFixtures.map(f => <FixtureRow key={f.id} fixture={f} teamSize={tournament.team_size} legNumber={legNumbers[f.id]} />)
             }
           </div>
         </>
@@ -278,6 +309,8 @@ function GroupsView({ tournament }) {
     f.round === currentRound &&
     (f.home_team_group === currentGroup || f.away_team_group === currentGroup)
   )
+
+  const legNumbers = useMemo(() => computeLegNumbers(groupFixtures), [groupFixtures])
 
   const exportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
@@ -365,7 +398,7 @@ function GroupsView({ tournament }) {
               <div className="divide-y divide-surface-border/40">
                 {roundFixtures.length === 0
                   ? <p className="text-sm text-slate-500 px-5 py-6">No fixtures in this round.</p>
-                  : roundFixtures.map(f => <FixtureRow key={f.id} fixture={f} teamSize={tournament.team_size} />)
+                  : roundFixtures.map(f => <FixtureRow key={f.id} fixture={f} teamSize={tournament.team_size} legNumber={legNumbers[f.id]} />)
                 }
               </div>
             </>

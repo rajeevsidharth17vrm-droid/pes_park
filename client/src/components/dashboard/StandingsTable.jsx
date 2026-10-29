@@ -73,6 +73,8 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
 
   // Export
   const exportRef = useRef(null)
+  const goldenBootExportRef = useRef(null)
+  const bestPlayerExportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
 
   async function handleExport() {
@@ -83,6 +85,38 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
       const a = document.createElement("a")
       a.href = dataUrl
       a.download = "Auction Tour - Points Table.png"
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleGoldenBootExport() {
+    if (!goldenBootExportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(goldenBootExportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = "Auction Tour - Golden Boot.png"
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleBestPlayerExport() {
+    if (!bestPlayerExportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(bestPlayerExportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = "Auction Tour - Best Players.png"
       a.click()
     } catch (e) {
       console.error("Export failed", e)
@@ -109,14 +143,17 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
 
   return (
     <div className="card overflow-hidden">
-      {/* Hidden export card */}
+      {/* Hidden export card — Points Table */}
       <div style={{ position: "fixed", top: -9999, left: -9999, width: 520 }}>
         <div ref={exportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
-          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16 }}>
-            <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>
-              Pes Park · Auction Tour
-            </p>
-            <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Points Table</p>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <img src={teamLeagueTrophy} alt="Trophy" style={{ width: 40, height: 40, objectFit: "contain", flexShrink: 0 }} />
+            <div>
+              <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>
+                Pes Park · Auction Tour
+              </p>
+              <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Points Table</p>
+            </div>
           </div>
           {/* Table header */}
           <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 28px 28px 28px 28px 28px 28px 28px 36px", gap: 4, padding: "0 4px 8px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -154,6 +191,58 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
         </div>
       </div>
 
+      {/* Hidden export card — Golden Boot */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 480 }}>
+        <div ref={goldenBootExportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <img src={goldenBoot} alt="Golden Boot" style={{ width: 40, height: 40, objectFit: "contain", flexShrink: 0 }} />
+            <div>
+              <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>Pes Park · Auction Tour</p>
+              <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Golden Boot</p>
+            </div>
+          </div>
+          {scorers.slice(0, 10).map((scorer, idx) => {
+            const isFirst = idx === 0
+            return (
+              <div key={scorer.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: isFirst ? "rgba(52,211,153,0.06)" : "transparent" }}>
+                <span style={{ color: isFirst ? "#fbbf24" : "#64748b", fontSize: 13, fontWeight: 700, width: 24, textAlign: "center", flexShrink: 0 }}>{idx + 1}</span>
+                <span style={{ color: isFirst ? "#ffffff" : "#e2e8f0", fontSize: 13, fontWeight: 600, flex: 1 }}>{scorer.name}</span>
+                <span style={{ color: "#94a3b8", fontSize: 11 }}>{scorer.team ?? "—"}</span>
+                <span style={{ color: isFirst ? "#34d399" : "#ffffff", fontSize: 14, fontWeight: 800, minWidth: 28, textAlign: "right" }}>{scorer.goals}</span>
+              </div>
+            )
+          })}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 14, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
+      {/* Hidden export card — Best Players */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 480 }}>
+        <div ref={bestPlayerExportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, background: "rgba(52,211,153,0.15)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ color: "#34d399", fontSize: 20 }}>⭐</span>
+            </div>
+            <div>
+              <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>Pes Park · Auction Tour</p>
+              <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Best Players</p>
+            </div>
+          </div>
+          {bpSorted.slice(0, 10).map((player, idx) => {
+            const isFirst = idx === 0
+            return (
+              <div key={player.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: isFirst ? "rgba(52,211,153,0.06)" : "transparent" }}>
+                <span style={{ color: isFirst ? "#34d399" : "#64748b", fontSize: 13, fontWeight: 700, width: 24, textAlign: "center", flexShrink: 0 }}>{idx + 1}</span>
+                <span style={{ color: isFirst ? "#ffffff" : "#e2e8f0", fontSize: 13, fontWeight: 600, flex: 1 }}>{player.name}</span>
+                <span style={{ color: "#94a3b8", fontSize: 11 }}>{player.teamName ?? "—"}</span>
+                <span style={{ color: isFirst ? "#34d399" : "#ffffff", fontSize: 14, fontWeight: 800, minWidth: 28, textAlign: "right" }}>{player.bestPlayerPoints}</span>
+              </div>
+            )
+          })}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 14, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
       {/* Header with dropdown */}
       <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -179,6 +268,24 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
           {view === "table" && teams.length > 0 && (
             <button
               onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40">
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? "Exporting…" : "Download"}
+            </button>
+          )}
+          {view === "scorers" && scorers.length > 0 && (
+            <button
+              onClick={handleGoldenBootExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40">
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? "Exporting…" : "Download"}
+            </button>
+          )}
+          {view === "bestplayer" && bpSorted.length > 0 && (
+            <button
+              onClick={handleBestPlayerExport}
               disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40">
               <Download className="w-3.5 h-3.5" />

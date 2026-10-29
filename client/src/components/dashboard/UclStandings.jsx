@@ -36,6 +36,8 @@ export default function UclStandings({ onPlayerClick }) {
 
   // Export
   const exportRef = useRef(null)
+  const goldenBootExportRef = useRef(null)
+  const koExportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
 
   async function handleExport() {
@@ -46,6 +48,38 @@ export default function UclStandings({ onPlayerClick }) {
       const a = document.createElement("a")
       a.href = dataUrl
       a.download = `${group?.name ?? "Group"} - Points Table.png`
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleGoldenBootExport() {
+    if (!goldenBootExportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(goldenBootExportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = "Solo Tour - Golden Boot.png"
+      a.click()
+    } catch (e) {
+      console.error("Export failed", e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleKoExport() {
+    if (!koExportRef.current || exporting) return
+    setExporting(true)
+    try {
+      const dataUrl = await toPng(koExportRef.current, { cacheBust: true, pixelRatio: 2 })
+      const a = document.createElement("a")
+      a.href = dataUrl
+      a.download = "Solo Tour - Knockout.png"
       a.click()
     } catch (e) {
       console.error("Export failed", e)
@@ -135,7 +169,61 @@ export default function UclStandings({ onPlayerClick }) {
         </div>
       </div>
 
-      <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between">
+      {/* Hidden export card — Golden Boot */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 480 }}>
+        <div ref={goldenBootExportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <img src={goldenBootGB} alt="Golden Boot" style={{ width: 40, height: 40, objectFit: "contain", flexShrink: 0 }} />
+            <div>
+              <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>Pes Park · Solo Tour</p>
+              <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>Golden Boot</p>
+            </div>
+          </div>
+          {scorers.slice(0, 10).map((scorer, idx) => {
+            const isFirst = idx === 0
+            return (
+              <div key={scorer.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: isFirst ? "rgba(52,211,153,0.06)" : "transparent" }}>
+                <span style={{ color: isFirst ? "#fbbf24" : "#64748b", fontSize: 13, fontWeight: 700, width: 24, textAlign: "center", flexShrink: 0 }}>{idx + 1}</span>
+                <span style={{ color: isFirst ? "#ffffff" : "#e2e8f0", fontSize: 13, fontWeight: 600, flex: 1 }}>{scorer.name}</span>
+                <span style={{ color: "#94a3b8", fontSize: 11 }}>{scorer.team ?? "—"}</span>
+                <span style={{ color: isFirst ? "#34d399" : "#ffffff", fontSize: 14, fontWeight: 800, minWidth: 28, textAlign: "right" }}>{scorer.goals}</span>
+              </div>
+            )
+          })}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 14, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
+      {/* Hidden export card — KO Round */}
+      <div style={{ position: "fixed", top: -9999, left: -9999, width: 480 }}>
+        <div ref={koExportRef} style={{ background: "#0f1923", padding: 24, fontFamily: "sans-serif", borderRadius: 12 }}>
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <img src={uclTrophy} alt="Solo Tour" style={{ width: 40, height: 40, objectFit: "contain", flexShrink: 0 }} />
+            <div>
+              <p style={{ color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: 2, margin: "0 0 4px" }}>Pes Park · Solo Tour</p>
+              <p style={{ color: "#ffffff", fontSize: 20, fontWeight: 800, margin: 0 }}>
+                Knockout — {knockout ? getRoundLabel(koCurrentRound, knockout.totalRounds || 5) : "KO Stage"}
+              </p>
+            </div>
+          </div>
+          {(knockout?.matches || []).filter(m => m.round === koCurrentRound).map(m => {
+            const isCompleted = m.status === "completed"
+            const p1IsWinner = isCompleted && m.winnerId === m.player1Id
+            const p2IsWinner = isCompleted && m.winnerId === m.player2Id
+            return (
+              <div key={`${m.round}-${m.matchNumber}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 4px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                <span style={{ color: "#475569", fontSize: 11, width: 24, textAlign: "center", flexShrink: 0 }}>#{m.matchNumber}</span>
+                <span style={{ flex: 1, color: p1IsWinner ? "#34d399" : (m.player1Name ? "#e2e8f0" : "#475569"), fontSize: 13, fontWeight: 600, textAlign: "right" }}>{m.player1Name ?? "TBD"}</span>
+                <span style={{ color: "#475569", fontSize: 11, flexShrink: 0, padding: "0 8px" }}>{isCompleted ? `${m.player1Score ?? 0} – ${m.player2Score ?? 0}` : "vs"}</span>
+                <span style={{ flex: 1, color: p2IsWinner ? "#34d399" : (m.player2Name ? "#e2e8f0" : "#475569"), fontSize: 13, fontWeight: 600 }}>{m.player2Name ?? "TBD"}</span>
+              </div>
+            )
+          })}
+          <p style={{ color: "#1e3a5f", fontSize: 10, textAlign: "center", marginTop: 14, marginBottom: 0 }}>pespark.in</p>
+        </div>
+      </div>
+
+      <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-3">
           <img src={headerIcon} alt="Solo Tour" className="w-9 h-9 object-contain flex-shrink-0" />
           <div>
@@ -143,16 +231,36 @@ export default function UclStandings({ onPlayerClick }) {
             <h2 className="text-base font-semibold text-white">{headerTitle}</h2>
           </div>
         </div>
-        <select
-          value={view}
-          onChange={e => setView(e.target.value)}
-          className="bg-pitch-800 border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
-        >
-          <option value="table">Group table</option>
-          <option value="fixtures">Fixtures</option>
-          <option value="knockout">Knockout</option>
-          <option value="scorers">Golden Boot</option>
-        </select>
+        <div className="flex items-center gap-2">
+          {view === "scorers" && scorers.length > 0 && (
+            <button
+              onClick={handleGoldenBootExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40">
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? "Exporting…" : "Download"}
+            </button>
+          )}
+          {view === "knockout" && knockout && (knockout.matches || []).length > 0 && (
+            <button
+              onClick={handleKoExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600/40 text-slate-400 hover:text-white hover:border-slate-500 text-xs font-semibold transition-colors disabled:opacity-40">
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? "Exporting…" : "Download"}
+            </button>
+          )}
+          <select
+            value={view}
+            onChange={e => setView(e.target.value)}
+            className="bg-pitch-800 border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
+          >
+            <option value="table">Group table</option>
+            <option value="fixtures">Fixtures</option>
+            <option value="knockout">Knockout</option>
+            <option value="scorers">Golden Boot</option>
+          </select>
+        </div>
       </div>
 
       {/* Group tabs — table and fixtures views are both scoped per group */}

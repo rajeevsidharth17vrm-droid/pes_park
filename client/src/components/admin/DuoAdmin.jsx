@@ -1003,12 +1003,35 @@ function DuoFixtureExportCard({ round, fixtures, exportRef, visible, tournamentN
   )
 }
 
+// Compute leg numbers for double round-robin: for each canonical pair (minId,maxId),
+// the fixture with the lower round number is Leg 1, the higher round is Leg 2.
+function computeLegNumbers(fixtures) {
+  const pairMap = {}  // "minId-maxId" -> [fixtureId sorted by round]
+  const sorted = [...fixtures].sort((a, b) => (a.round ?? 0) - (b.round ?? 0))
+  sorted.forEach(f => {
+    if (!f.home_team_id || !f.away_team_id) return
+    const key = [Math.min(f.home_team_id, f.away_team_id), Math.max(f.home_team_id, f.away_team_id)].join("-")
+    if (!pairMap[key]) pairMap[key] = []
+    pairMap[key].push(f.id)
+  })
+  const legMap = {}
+  Object.values(pairMap).forEach(ids => {
+    if (ids.length >= 2) {
+      legMap[ids[0]] = 1
+      legMap[ids[1]] = 2
+    }
+  })
+  return legMap
+}
+
 function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
   const [enteringResult, setEnteringResult] = useState(null)
   const [enteringTb, setEnteringTb] = useState(null)
   const [editingFixtureId, setEditingFixtureId] = useState(null)
   const [editingInitialData, setEditingInitialData] = useState(null)
   const [editResetting, setEditResetting] = useState(null)  // fixtureId being reset before edit
+
+  const legNumbers = useMemo(() => computeLegNumbers(fixtures), [fixtures])
 
   const displayFixtures = activeRound === "all" || activeRound == null
     ? fixtures
@@ -1046,6 +1069,16 @@ function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
                     <div className="flex items-center gap-2 text-sm flex-wrap">
                       {f.home_team_group && (
                         <span className="text-[10px] text-accent/70 font-bold">G{GROUP_LETTERS[f.home_team_group-1]}</span>
+                      )}
+                      {legNumbers[f.id] && (
+                        <span className={cn(
+                          "text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide",
+                          legNumbers[f.id] === 1
+                            ? "bg-sky-500/15 text-sky-400 border border-sky-500/25"
+                            : "bg-violet-500/15 text-violet-400 border border-violet-500/25"
+                        )}>
+                          Leg {legNumbers[f.id]}
+                        </span>
                       )}
                       <span className={cn("font-medium", f.winner_team_id === f.home_team_id ? "text-white" : "text-slate-400")}>
                         {f.home_team_name ?? "TBD"}
