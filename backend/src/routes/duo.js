@@ -53,9 +53,14 @@ function resultStr(homeScore, awayScore) {
 }
 
 /**
- * Build a single-elimination bracket from an array of teamIds (already in desired seed order).
- * Returns array of fixture IDs grouped by round (fixturesByRound[r] = [id, id, ...]).
- * Writes directly to DB via the provided client.
+ * Build a double-leg single-elimination bracket.
+ * Each knockout tie = 2 fixtures sharing the same tie_group:
+ *   Leg 1: homeId vs awayId
+ *   Leg 2: awayId vs homeId  (home/away swapped)
+ * Winner is picked manually via the pick-winner endpoint.
+ * Advancement uses bracket_position arithmetic (no next_fixture_id).
+ *
+ * Returns fixturesByRound[r] = [ { leg1Id, leg2Id, tg }, … ]
  */
 async function buildKnockoutBracket(client, tournamentId, seededTeamIds, stage = "main") {
   const n = seededTeamIds.length
@@ -66,52 +71,61 @@ async function buildKnockoutBracket(client, tournamentId, seededTeamIds, stage =
   while (padded.length < bracketSize) padded.push(null) // BYE
 
   const totalRounds = Math.log2(bracketSize)
-  const fixturesByRound = []
 
-  // Create empty fixture slots
+  // Find current max tie_group for this tournament so we don't collide
+  const maxTgRes = await client.query(
+    "SELECT COALESCE(MAX(tie_group), 0) AS max_tg FROM duo_fixtures WHERE tournament_id = $1",
+    [tournamentId]
+  )
+  let tgCounter = parseInt(maxTgRes.rows[0].max_tg)
+
+  // Create Leg 1 + Leg 2 fixture pairs for every round / position
+  const fixturesByRound = [] // [round][pos] = { leg1Id, leg2Id, tg }
+
   for (let r = 1; r <= totalRounds; r++) {
     const matchCount = bracketSize / Math.pow(2, r)
     fixturesByRound.push([])
     for (let pos = 1; pos <= matchCount; pos++) {
-      const res = await client.query(
-        `INSERT INTO duo_fixtures (tournament_id, round, bracket_position, stage, home_team_id, away_team_id)
-         VALUES ($1, $2, $3, $4, NULL, NULL) RETURNING id`,
-        [tournamentId, r, pos, stage]
+      tgCounter++
+      const tg = tgCounter
+      const r1 = await client.query(
+        `INSERT INTO duo_fixtures
+           (tournament_id, round, bracket_position, stage, leg_number, tie_group, home_team_id, away_team_id)
+         VALUES ($1,$2,$3,$4,1,$5,NULL,NULL) RETURNING id`,
+        [tournamentId, r, pos, stage, tg]
       )
-      fixturesByRound[r - 1].push(res.rows[0].id)
+      const r2 = await client.query(
+        `INSERT INTO duo_fixtures
+           (tournament_id, round, bracket_position, stage, leg_number, tie_group, home_team_id, away_team_id)
+         VALUES ($1,$2,$3,$4,2,$5,NULL,NULL) RETURNING id`,
+        [tournamentId, r, pos, stage, tg]
+      )
+      fixturesByRound[r - 1].push({ leg1Id: r1.rows[0].id, leg2Id: r2.rows[0].id, tg })
     }
   }
 
-  // Wire next_fixture_id (winner goes to ceil(pos/2) of next round)
-  for (let r = 0; r < totalRounds - 1; r++) {
-    for (let i = 0; i < fixturesByRound[r].length; i++) {
-      const nextFixId = fixturesByRound[r + 1][Math.floor(i / 2)]
-      await client.query(
-        "UPDATE duo_fixtures SET next_fixture_id = $1 WHERE id = $2",
-        [nextFixId, fixturesByRound[r][i]]
-      )
-    }
-  }
-
-  // Fill round 1 teams
+  // Fill round 1 teams; handle BYEs (auto-advance immediately)
   for (let i = 0; i < fixturesByRound[0].length; i++) {
     const homeId = padded[i * 2] ?? null
     const awayId = padded[i * 2 + 1] ?? null
-    await client.query(
-      "UPDATE duo_fixtures SET home_team_id = $1, away_team_id = $2 WHERE id = $3",
-      [homeId, awayId, fixturesByRound[0][i]]
-    )
-    // Auto-advance BYE
+    const { leg1Id, leg2Id } = fixturesByRound[0][i]
+
+    // Leg 1: home vs away; Leg 2: away vs home
+    await client.query("UPDATE duo_fixtures SET home_team_id=$1, away_team_id=$2 WHERE id=$3", [homeId, awayId, leg1Id])
+    await client.query("UPDATE duo_fixtures SET home_team_id=$1, away_team_id=$2 WHERE id=$3", [awayId, homeId, leg2Id])
+
     if (homeId && !awayId) {
-      const nextFixId = fixturesByRound[1]?.[Math.floor(i / 2)]
-      if (nextFixId) {
-        const col = i % 2 === 0 ? "home_team_id" : "away_team_id"
-        await client.query(`UPDATE duo_fixtures SET ${col} = $1 WHERE id = $2`, [homeId, nextFixId])
+      // BYE — mark both legs completed, advance homeId
+      await client.query("UPDATE duo_fixtures SET status='completed', winner_team_id=$1 WHERE id=$2", [homeId, leg1Id])
+      await client.query("UPDATE duo_fixtures SET status='completed', winner_team_id=$1 WHERE id=$2", [homeId, leg2Id])
+      if (fixturesByRound[1]) {
+        const { leg1Id: nl1, leg2Id: nl2 } = fixturesByRound[1][Math.floor(i / 2)]
+        // Odd position (i%2===0 → bracket_position 1,3,5…) → home in Leg 1, away in Leg 2
+        const col1 = i % 2 === 0 ? "home_team_id" : "away_team_id"
+        const col2 = i % 2 === 0 ? "away_team_id" : "home_team_id"
+        await client.query(`UPDATE duo_fixtures SET ${col1}=$1 WHERE id=$2`, [homeId, nl1])
+        await client.query(`UPDATE duo_fixtures SET ${col2}=$1 WHERE id=$2`, [homeId, nl2])
       }
-      await client.query(
-        "UPDATE duo_fixtures SET status = 'completed', winner_team_id = $1 WHERE id = $2",
-        [homeId, fixturesByRound[0][i]]
-      )
     }
   }
 
@@ -660,8 +674,10 @@ router.post("/tournaments/:id/fixtures/generate", authenticate, adminOnly, async
 
     await withTransaction(async (client) => {
       if (tournament.format === "round_robin") {
+        const homeAndAway = tournament.settings?.home_and_away === true
         const rounds = generateRoundRobin(teamIds)
         let roundNum = 1
+        // First leg (or only leg if home_and_away is disabled)
         for (const round of rounds) {
           for (const [homeId, awayId] of round) {
             await client.query(
@@ -672,15 +688,18 @@ router.post("/tournaments/:id/fixtures/generate", authenticate, adminOnly, async
           }
           roundNum++
         }
-        for (const round of rounds) {
-          for (const [homeId, awayId] of round) {
-            await client.query(
-              `INSERT INTO duo_fixtures (tournament_id, round, home_team_id, away_team_id, stage)
-               VALUES ($1, $2, $3, $4, 'main')`,
-              [req.params.id, roundNum, awayId, homeId]
-            )
+        // Second leg (away fixtures) — only when Home & Away is enabled
+        if (homeAndAway) {
+          for (const round of rounds) {
+            for (const [homeId, awayId] of round) {
+              await client.query(
+                `INSERT INTO duo_fixtures (tournament_id, round, home_team_id, away_team_id, stage)
+                 VALUES ($1, $2, $3, $4, 'main')`,
+                [req.params.id, roundNum, awayId, homeId]
+              )
+            }
+            roundNum++
           }
-          roundNum++
         }
       } else if (tournament.format === "knockout") {
         const shuffled = [...teamIds].sort(() => Math.random() - 0.5)
@@ -714,11 +733,15 @@ router.post("/tournaments/:id/fixtures/generate", authenticate, adminOnly, async
 router.post("/tournaments/:id/fixtures/create-knockout-bracket", authenticate, adminOnly, async (req, res) => {
   try {
     const tournamentId = req.params.id
-    const { bracket_size, matchups } = req.body
+    const { bracket_size, matchups, legs = 2 } = req.body
 
     const validSizes = [4, 8, 16, 32]
     if (!validSizes.includes(bracket_size))
       return res.status(400).json({ error: `bracket_size must be one of: ${validSizes.join(", ")}` })
+
+    const legsInt = parseInt(legs)
+    if (![1, 2].includes(legsInt))
+      return res.status(400).json({ error: "legs must be 1 or 2" })
 
     const expectedPairs = bracket_size / 2
     if (!Array.isArray(matchups) || matchups.length !== expectedPairs)
@@ -742,52 +765,67 @@ router.post("/tournaments/:id/fixtures/create-knockout-bracket", authenticate, a
     const totalRounds = Math.log2(bracket_size)
 
     await withTransaction(async (client) => {
-      // 1. Create all empty fixture slots for every round
-      const fixturesByRound = [] // fixturesByRound[r] = [{id, pos}]
+      // 1. Find current max tie_group to avoid collisions
+      const maxTgRes = await client.query(
+        "SELECT COALESCE(MAX(tie_group), 0) AS max_tg FROM duo_fixtures WHERE tournament_id = $1",
+        [tournamentId]
+      )
+      let tgCounter = parseInt(maxTgRes.rows[0].max_tg)
+
+      // 2. Create fixture(s) for every round / position
+      //    legsInt=1 → 1 fixture per tie (tie_group used for pick-winner logic)
+      //    legsInt=2 → 2 fixtures per tie (Leg 1 + Leg 2, home/away swapped)
+      const fixturesByRound = [] // [r] = [ { leg1Id, leg2Id? } ]
       for (let r = 1; r <= totalRounds; r++) {
         const matchCount = bracket_size / Math.pow(2, r)
         fixturesByRound.push([])
         for (let pos = 1; pos <= matchCount; pos++) {
-          const ins = await client.query(
-            `INSERT INTO duo_fixtures (tournament_id, round, bracket_position, stage, home_team_id, away_team_id)
-             VALUES ($1, $2, $3, $4, NULL, NULL) RETURNING id`,
-            [tournamentId, r, pos, stageFilter]
+          tgCounter++
+          const tg = tgCounter
+          const r1 = await client.query(
+            `INSERT INTO duo_fixtures
+               (tournament_id, round, bracket_position, stage, leg_number, tie_group, home_team_id, away_team_id)
+             VALUES ($1,$2,$3,$4,1,$5,NULL,NULL) RETURNING id`,
+            [tournamentId, r, pos, stageFilter, tg]
           )
-          fixturesByRound[r - 1].push(ins.rows[0].id)
+          const entry = { leg1Id: r1.rows[0].id, leg2Id: null, tg }
+          if (legsInt === 2) {
+            const r2 = await client.query(
+              `INSERT INTO duo_fixtures
+                 (tournament_id, round, bracket_position, stage, leg_number, tie_group, home_team_id, away_team_id)
+               VALUES ($1,$2,$3,$4,2,$5,NULL,NULL) RETURNING id`,
+              [tournamentId, r, pos, stageFilter, tg]
+            )
+            entry.leg2Id = r2.rows[0].id
+          }
+          fixturesByRound[r - 1].push(entry)
         }
       }
 
-      // 2. Wire next_fixture_id so winners auto-advance
-      for (let r = 0; r < totalRounds - 1; r++) {
-        for (let i = 0; i < fixturesByRound[r].length; i++) {
-          const nextFixId = fixturesByRound[r + 1][Math.floor(i / 2)]
-          await client.query(
-            "UPDATE duo_fixtures SET next_fixture_id = $1 WHERE id = $2",
-            [nextFixId, fixturesByRound[r][i]]
-          )
-        }
-      }
-
-      // 3. Fill round 1 with the provided matchups
+      // 3. Fill round 1 with provided matchups
       for (let i = 0; i < matchups.length; i++) {
         const { home_team_id = null, away_team_id = null } = matchups[i] ?? {}
         const homeId = home_team_id ?? null
         const awayId = away_team_id ?? null
-        await client.query(
-          "UPDATE duo_fixtures SET home_team_id = $1, away_team_id = $2 WHERE id = $3",
-          [homeId, awayId, fixturesByRound[0][i]]
-        )
+        const { leg1Id, leg2Id } = fixturesByRound[0][i]
+
+        await client.query("UPDATE duo_fixtures SET home_team_id=$1, away_team_id=$2 WHERE id=$3", [homeId, awayId, leg1Id])
+        if (leg2Id) {
+          // Leg 2: home/away swapped
+          await client.query("UPDATE duo_fixtures SET home_team_id=$1, away_team_id=$2 WHERE id=$3", [awayId, homeId, leg2Id])
+        }
+
         // Auto-advance BYE
         if (homeId && !awayId) {
-          const nextFixId = fixturesByRound[1]?.[Math.floor(i / 2)]
-          if (nextFixId) {
-            const col = i % 2 === 0 ? "home_team_id" : "away_team_id"
-            await client.query(`UPDATE duo_fixtures SET ${col} = $1 WHERE id = $2`, [homeId, nextFixId])
+          await client.query("UPDATE duo_fixtures SET status='completed', winner_team_id=$1 WHERE id=$2", [homeId, leg1Id])
+          if (leg2Id) await client.query("UPDATE duo_fixtures SET status='completed', winner_team_id=$1 WHERE id=$2", [homeId, leg2Id])
+          if (fixturesByRound[1]) {
+            const { leg1Id: nl1, leg2Id: nl2 } = fixturesByRound[1][Math.floor(i / 2)]
+            const col1 = i % 2 === 0 ? "home_team_id" : "away_team_id"
+            const col2 = i % 2 === 0 ? "away_team_id" : "home_team_id"
+            await client.query(`UPDATE duo_fixtures SET ${col1}=$1 WHERE id=$2`, [homeId, nl1])
+            if (nl2) await client.query(`UPDATE duo_fixtures SET ${col2}=$1 WHERE id=$2`, [homeId, nl2])
           }
-          await client.query(
-            "UPDATE duo_fixtures SET status='completed', winner_team_id=$1 WHERE id=$2",
-            [homeId, fixturesByRound[0][i]]
-          )
         }
       }
 
@@ -887,6 +925,79 @@ router.get("/fixtures/:id", async (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PICK WINNER (double-leg knockout ties)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/duo/fixtures/tie/:tieGroup/pick-winner
+ * Body: { winner_team_id, tournament_id }
+ * Sets the winner on all legs of a knockout tie and advances them to the
+ * next round's fixture pair using bracket_position arithmetic.
+ *
+ * NOTE: This route MUST be registered before /fixtures/:id/... routes so
+ * Express doesn't interpret "tie" as a fixture id.
+ */
+router.patch("/fixtures/tie/:tieGroup/pick-winner", authenticate, adminOnly, async (req, res) => {
+  try {
+    const tgInt = parseInt(req.params.tieGroup)
+    if (isNaN(tgInt)) return res.status(400).json({ error: "Invalid tieGroup" })
+
+    const { winner_team_id, tournament_id } = req.body
+    if (!winner_team_id || !tournament_id)
+      return res.status(400).json({ error: "winner_team_id and tournament_id are required" })
+
+    const tieRes = await query(
+      "SELECT * FROM duo_fixtures WHERE tie_group = $1 AND tournament_id = $2 ORDER BY leg_number",
+      [tgInt, tournament_id]
+    )
+    if (!tieRes.rows.length) return res.status(404).json({ error: "Tie not found" })
+
+    const legs = tieRes.rows
+    const leg1 = legs.find(f => f.leg_number === 1) ?? legs[0]
+
+    // All real (non-BYE) legs must be completed
+    const incomplete = legs.find(f => f.home_team_id && f.away_team_id && f.status !== "completed")
+    if (incomplete)
+      return res.status(400).json({ error: "All legs must be completed before picking a winner" })
+
+    // Winner must be one of the competing teams
+    const validIds = new Set([leg1.home_team_id, leg1.away_team_id].filter(Boolean).map(Number))
+    if (!validIds.has(Number(winner_team_id)))
+      return res.status(400).json({ error: "winner_team_id must be one of the teams in this tie" })
+
+    await withTransaction(async (client) => {
+      // Set winner on all legs of this tie
+      await client.query(
+        "UPDATE duo_fixtures SET winner_team_id = $1 WHERE tie_group = $2 AND tournament_id = $3",
+        [winner_team_id, tgInt, tournament_id]
+      )
+
+      // Advance winner to next round using bracket_position arithmetic
+      const nextRound = leg1.round + 1
+      const nextPos   = Math.ceil(leg1.bracket_position / 2)
+      // Odd bracket_position → fills home slot; Even → fills away slot (for Leg 1)
+      // Leg 2 is always the opposite column (because it's the swapped fixture)
+      const isOdd = leg1.bracket_position % 2 === 1
+      const col1  = isOdd ? "home_team_id" : "away_team_id"
+      const col2  = isOdd ? "away_team_id" : "home_team_id"
+
+      await client.query(
+        `UPDATE duo_fixtures SET ${col1} = $1
+         WHERE tournament_id=$2 AND round=$3 AND bracket_position=$4 AND leg_number=1`,
+        [winner_team_id, tournament_id, nextRound, nextPos]
+      )
+      await client.query(
+        `UPDATE duo_fixtures SET ${col2} = $1
+         WHERE tournament_id=$2 AND round=$3 AND bracket_position=$4 AND leg_number=2`,
+        [winner_team_id, tournament_id, nextRound, nextPos]
+      )
+    })
+
+    res.json({ picked: true, winner_team_id: Number(winner_team_id) })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // FIXTURE RESULT
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -914,8 +1025,10 @@ router.patch("/fixtures/:id/result", authenticate, adminOnly, async (req, res) =
     if (matchups.length !== fixture.team_size)
       return res.status(400).json({ error: `Expected ${fixture.team_size} matchups, got ${matchups.length}` })
 
-    // A tiebreaker is needed only for knockout-phase fixtures
-    const isKnockoutPhase = fixture.format === "knockout" || fixture.stage === "knockout"
+    // Double-leg knockout tie: winner is picked manually via pick-winner endpoint
+    const isDoubleLegTie  = fixture.tie_group != null
+    // Single-leg knockout: tiebreaker + auto-advance still apply
+    const isKnockoutPhase = !isDoubleLegTie && (fixture.format === "knockout" || fixture.stage === "knockout")
 
     await withTransaction(async (client) => {
       await client.query("DELETE FROM duo_match_records WHERE fixture_id = $1", [req.params.id])
@@ -938,39 +1051,45 @@ router.patch("/fixtures/:id/result", authenticate, adminOnly, async (req, res) =
 
       const teamResult = resultStr(homeWins, awayWins)
       const isTie = teamResult === "draw"
-      const winnerTeamId = isTie ? null : (teamResult === "home" ? fixture.home_team_id : fixture.away_team_id)
-      const needsTiebreaker = isKnockoutPhase && isTie
 
-      await client.query(
-        `UPDATE duo_fixtures
-         SET home_score = $1, away_score = $2, winner_team_id = $3,
-             is_tiebreaker_needed = $4,
-             status = CASE WHEN $5 THEN 'upcoming' ELSE 'completed' END
-         WHERE id = $6`,
-        [homeWins, awayWins, winnerTeamId, needsTiebreaker, needsTiebreaker, req.params.id]
-      )
-
-      // Update team standings for group-phase / round-robin fixtures
-      const updateStandings = fixture.format === "round_robin" || fixture.stage === "group"
-      if (updateStandings) {
-        const updateTeam = async (teamId, won, drew, lost, gf, ga) =>
-          client.query(
-            `UPDATE duo_teams SET played=played+1, won=won+$1, drawn=drawn+$2, lost=lost+$3, gf=gf+$4, ga=ga+$5 WHERE id=$6`,
-            [won, drew, lost, gf, ga, teamId]
-          )
-        await updateTeam(fixture.home_team_id,
-          teamResult === "home" ? 1 : 0, isTie ? 1 : 0, teamResult === "away" ? 1 : 0, homeWins, awayWins)
-        await updateTeam(fixture.away_team_id,
-          teamResult === "away" ? 1 : 0, isTie ? 1 : 0, teamResult === "home" ? 1 : 0, awayWins, homeWins)
-      }
-
-      // Advance winner in knockout bracket
-      if (isKnockoutPhase && !needsTiebreaker && winnerTeamId && fixture.next_fixture_id) {
-        const col = fixture.bracket_position % 2 === 1 ? "home_team_id" : "away_team_id"
+      if (isDoubleLegTie) {
+        // Double-leg: just record scores and mark completed — no auto-advance, no winner yet
         await client.query(
-          `UPDATE duo_fixtures SET ${col} = $1 WHERE id = $2`,
-          [winnerTeamId, fixture.next_fixture_id]
+          `UPDATE duo_fixtures SET home_score=$1, away_score=$2, status='completed' WHERE id=$3`,
+          [homeWins, awayWins, req.params.id]
         )
+      } else {
+        const winnerTeamId = isTie ? null : (teamResult === "home" ? fixture.home_team_id : fixture.away_team_id)
+        const needsTiebreaker = isKnockoutPhase && isTie
+
+        await client.query(
+          `UPDATE duo_fixtures
+           SET home_score=$1, away_score=$2, winner_team_id=$3,
+               is_tiebreaker_needed=$4,
+               status = CASE WHEN $5 THEN 'upcoming' ELSE 'completed' END
+           WHERE id=$6`,
+          [homeWins, awayWins, winnerTeamId, needsTiebreaker, needsTiebreaker, req.params.id]
+        )
+
+        // Update team standings for group-phase / round-robin fixtures
+        const updateStandings = fixture.format === "round_robin" || fixture.stage === "group"
+        if (updateStandings) {
+          const updateTeam = async (teamId, won, drew, lost, gf, ga) =>
+            client.query(
+              `UPDATE duo_teams SET played=played+1, won=won+$1, drawn=drawn+$2, lost=lost+$3, gf=gf+$4, ga=ga+$5 WHERE id=$6`,
+              [won, drew, lost, gf, ga, teamId]
+            )
+          await updateTeam(fixture.home_team_id,
+            teamResult === "home" ? 1 : 0, isTie ? 1 : 0, teamResult === "away" ? 1 : 0, homeWins, awayWins)
+          await updateTeam(fixture.away_team_id,
+            teamResult === "away" ? 1 : 0, isTie ? 1 : 0, teamResult === "home" ? 1 : 0, awayWins, homeWins)
+        }
+
+        // Advance winner in single-leg knockout bracket
+        if (isKnockoutPhase && !needsTiebreaker && winnerTeamId && fixture.next_fixture_id) {
+          const col = fixture.bracket_position % 2 === 1 ? "home_team_id" : "away_team_id"
+          await client.query(`UPDATE duo_fixtures SET ${col}=$1 WHERE id=$2`, [winnerTeamId, fixture.next_fixture_id])
+        }
       }
     })
 
@@ -999,8 +1118,9 @@ router.patch("/fixtures/:id/reset", authenticate, adminOnly, async (req, res) =>
     const fixture = fixRes.rows[0]
     if (fixture.status !== "completed") return res.status(400).json({ error: "Fixture not completed" })
 
-    const isKnockoutPhase = fixture.format === "knockout" || fixture.stage === "knockout"
-    const updateStandings  = fixture.format === "round_robin" || fixture.stage === "group"
+    const isDoubleLegTie  = fixture.tie_group != null
+    const isKnockoutPhase = !isDoubleLegTie && (fixture.format === "knockout" || fixture.stage === "knockout")
+    const updateStandings = fixture.format === "round_robin" || fixture.stage === "group"
 
     await withTransaction(async (client) => {
       if (updateStandings) {
@@ -1019,11 +1139,38 @@ router.patch("/fixtures/:id/reset", authenticate, adminOnly, async (req, res) =>
           fixture.away_score, fixture.home_score)
       }
 
+      // Single-leg knockout: un-advance via next_fixture_id
       if (isKnockoutPhase && fixture.winner_team_id && fixture.next_fixture_id) {
         const col = fixture.bracket_position % 2 === 1 ? "home_team_id" : "away_team_id"
         await client.query(`UPDATE duo_fixtures SET ${col} = NULL WHERE id = $1`, [fixture.next_fixture_id])
       }
 
+      // Double-leg tie: if winner was already picked, un-advance from next round
+      if (isDoubleLegTie && fixture.winner_team_id != null) {
+        // Clear winner_team_id from all legs of this tie (so pick-winner becomes available again)
+        await client.query(
+          "UPDATE duo_fixtures SET winner_team_id = NULL WHERE tie_group = $1 AND tournament_id = $2",
+          [fixture.tie_group, fixture.tournament_id]
+        )
+        // Un-advance from next round
+        const nextRound = fixture.round + 1
+        const nextPos   = Math.ceil(fixture.bracket_position / 2)
+        const isOdd     = fixture.bracket_position % 2 === 1
+        const col1      = isOdd ? "home_team_id" : "away_team_id"
+        const col2      = isOdd ? "away_team_id" : "home_team_id"
+        await client.query(
+          `UPDATE duo_fixtures SET ${col1} = NULL
+           WHERE tournament_id=$1 AND round=$2 AND bracket_position=$3 AND leg_number=1`,
+          [fixture.tournament_id, nextRound, nextPos]
+        )
+        await client.query(
+          `UPDATE duo_fixtures SET ${col2} = NULL
+           WHERE tournament_id=$1 AND round=$2 AND bracket_position=$3 AND leg_number=2`,
+          [fixture.tournament_id, nextRound, nextPos]
+        )
+      }
+
+      // Reset only this individual fixture's scores / match records
       await client.query(
         `UPDATE duo_fixtures
          SET home_score=0, away_score=0, winner_team_id=NULL,

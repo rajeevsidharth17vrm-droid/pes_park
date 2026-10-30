@@ -70,6 +70,9 @@ export const duoApi = {
   setTiebreaker: (fixtureId, body) =>
     api.patch(`${BASE}/fixtures/${fixtureId}/tiebreaker`, body).then(r => r.data),
 
+  pickTieWinner: (tieGroup, winner_team_id, tournament_id) =>
+    api.patch(`${BASE}/fixtures/tie/${tieGroup}/pick-winner`, { winner_team_id, tournament_id }).then(r => r.data),
+
   // ── Group Knockout ───────────────────────────────────────────────────────
   drawGroups: (tournamentId, body) =>
     api.post(`${BASE}/tournaments/${tournamentId}/draw-groups`, body).then(r => r.data),

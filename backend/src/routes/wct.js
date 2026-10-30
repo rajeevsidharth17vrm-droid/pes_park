@@ -46,21 +46,27 @@ router.get("/", auth, async (req, res, next) => {
 // POST /api/wct — create tournament
 router.post("/", auth, async (req, res, next) => {
   try {
-    const { name } = z.object({ name: z.string().min(1) }).parse(req.body)
+    const { name, group_count, teams_per_group } = z.object({
+      name: z.string().min(1),
+      group_count: z.number().int().min(2).max(8).default(8),
+      teams_per_group: z.number().int().min(2).max(16).default(8),
+    }).parse(req.body)
     const r = await query(
-      "INSERT INTO wct_tournaments (name) VALUES ($1) RETURNING *", [name]
+      "INSERT INTO wct_tournaments (name, group_count, teams_per_group) VALUES ($1,$2,$3) RETURNING *",
+      [name, group_count, teams_per_group]
     )
     res.status(201).json(r.rows[0])
   } catch (err) { next(err) }
 })
 
-// PATCH /api/wct/:id — update tournament (name or status)
+// PATCH /api/wct/:id — update tournament (name, status, or awards)
 router.patch("/:id", auth, async (req, res, next) => {
   try {
-    const { name, status } = req.body
+    const { name, status, awards } = req.body
     const sets = [], vals = []
     if (name)   { vals.push(name);   sets.push(`name=$${vals.length}`) }
     if (status) { vals.push(status); sets.push(`status=$${vals.length}`) }
+    if (awards !== undefined) { vals.push(JSON.stringify(awards)); sets.push(`awards=$${vals.length}`) }
     if (!sets.length) return res.status(400).json({ error: "Nothing to update" })
     vals.push(req.params.id)
     const r = await query(
@@ -396,6 +402,37 @@ router.get("/:id/top-scorers", async (req, res, next) => {
       LIMIT 20
     `, [req.params.id])
     res.json(r.rows)
+  } catch (err) { next(err) }
+})
+
+// GET /api/wct/:id/golden-glove — teams ranked by least goals conceded (min 1 game played)
+router.get("/:id/golden-glove", async (req, res, next) => {
+  try {
+    const r = await query(`
+      SELECT
+        t.id AS team_id, t.name AS team_name, t.group_letter,
+        COUNT(f.id) FILTER (WHERE f.status='completed') AS played,
+        COALESCE(SUM(CASE
+          WHEN f.status='completed' AND f.home_team_id=t.id THEN f.away_goals
+          WHEN f.status='completed' AND f.away_team_id=t.id THEN f.home_goals
+          ELSE 0 END),0) AS goals_conceded
+      FROM wct_teams t
+      LEFT JOIN wct_group_fixtures f
+        ON f.tournament_id=t.tournament_id
+        AND (f.home_team_id=t.id OR f.away_team_id=t.id)
+      WHERE t.tournament_id=$1 AND t.group_letter IS NOT NULL
+      GROUP BY t.id, t.name, t.group_letter
+      HAVING COUNT(f.id) FILTER (WHERE f.status='completed') > 0
+      ORDER BY goals_conceded ASC, played DESC
+      LIMIT 20
+    `, [req.params.id])
+    res.json(r.rows.map(row => ({
+      team_id: row.team_id,
+      team_name: row.team_name,
+      group_letter: row.group_letter,
+      played: parseInt(row.played) || 0,
+      goals_conceded: parseInt(row.goals_conceded) || 0,
+    })))
   } catch (err) { next(err) }
 })
 

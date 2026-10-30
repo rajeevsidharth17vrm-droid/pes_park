@@ -76,11 +76,40 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
   const goldenBootExportRef = useRef(null)
   const bestPlayerExportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
+  const [logoDataUrls, setLogoDataUrls] = useState({}) // teamId → base64 data URL
 
+  // Pre-fetch a single image as a base64 data URL (bypasses CORS taint in canvas)
+  async function fetchAsDataUrl(url) {
+    if (!url) return null
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      return null
+    }
+  }
+
+  // Pre-load logos for all teams that have one, then capture PNG
   async function handleExport() {
     if (!exportRef.current || exporting) return
     setExporting(true)
     try {
+      // Build base64 map for all teams with logos
+      const entries = await Promise.all(
+        teams
+          .filter(t => t.logoUrl)
+          .map(async t => [t.id, await fetchAsDataUrl(t.logoUrl)])
+      )
+      const map = Object.fromEntries(entries.filter(([, v]) => v))
+      setLogoDataUrls(map)
+      // Give React one tick to re-render with the data URLs before capturing
+      await new Promise(r => setTimeout(r, 80))
       const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2 })
       const a = document.createElement("a")
       a.href = dataUrl
@@ -164,6 +193,7 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
           {/* Rows */}
           {teams.map((team, i) => {
             const isFirst = Number(team.position) === 1
+            const logoSrc = logoDataUrls[team.id] || null
             return (
               <div key={team.id} style={{
                 display: "grid",
@@ -175,7 +205,16 @@ export default function StandingsTable({ teams, players, onPlayerClick, view: co
                 alignItems: "center",
               }}>
                 <span style={{ color: i < 5 ? "#34d399" : "#64748b", fontSize: 12, fontWeight: 600, textAlign: "center" }}>{team.position}</span>
-                <span style={{ color: isFirst ? "#f5a623" : "#e2e8f0", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{team.name}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, overflow: "hidden" }}>
+                  {logoSrc ? (
+                    <img src={logoSrc} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 22, height: 22, borderRadius: 4, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ color: "#64748b", fontSize: 9, fontWeight: 700 }}>{team.name?.slice(0, 2).toUpperCase()}</span>
+                    </div>
+                  )}
+                  <span style={{ color: isFirst ? "#f5a623" : "#e2e8f0", fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{team.name}</span>
+                </div>
                 <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.played}</span>
                 <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.won}</span>
                 <span style={{ color: "#94a3b8", fontSize: 12, textAlign: "center" }}>{team.drawn}</span>

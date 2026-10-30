@@ -187,7 +187,7 @@ export const favoritesApi = {
 export const wctApi = {
   // Tournaments
   list:             ()              => api.get("/wct").then(r => r.data),
-  create:           (name)          => api.post("/wct", { name }).then(r => r.data),
+  create:           (name, group_count = 8, teams_per_group = 8) => api.post("/wct", { name, group_count, teams_per_group }).then(r => r.data),
   update:           (id, body)      => api.patch(`/wct/${id}`, body).then(r => r.data),
   remove:           (id)            => api.delete(`/wct/${id}`).then(r => r.data),
   // Teams
@@ -208,6 +208,7 @@ export const wctApi = {
   // Standings & top scorers
   standings:        (id)            => api.get(`/wct/${id}/standings`).then(r => r.data),
   topScorers:       (id)            => api.get(`/wct/${id}/top-scorers`).then(r => r.data),
+  goldenGlove:      (id)            => api.get(`/wct/${id}/golden-glove`).then(r => r.data),
   // Qualification
   qualified:        (id)            => api.get(`/wct/${id}/qualified`).then(r => r.data),
   qualify:          (id, body)      => api.post(`/wct/${id}/qualified`, body).then(r => r.data),

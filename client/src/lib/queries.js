@@ -906,8 +906,8 @@ export const useGenerateDuoFixtures = () => {
 export const useCreateDuoKnockoutBracket = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ tournamentId, bracket_size, matchups }) =>
-      duoApi.createKnockoutBracket(tournamentId, { bracket_size, matchups }),
+    mutationFn: ({ tournamentId, bracket_size, matchups, legs }) =>
+      duoApi.createKnockoutBracket(tournamentId, { bracket_size, matchups, legs }),
     onSuccess: (_, { tournamentId }) => {
       qc.invalidateQueries({ queryKey: ["duo-tournament", tournamentId] })
       qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
@@ -957,6 +957,17 @@ export const useSetDuoTiebreaker = () => {
     onSuccess: (_, { tournamentId }) => {
       qc.invalidateQueries({ queryKey: ["duo-fixtures", tournamentId] })
       qc.invalidateQueries({ queryKey: ["duo-standings", tournamentId] })
+    },
+  })
+}
+
+export const usePickDuoTieWinner = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tieGroup, winner_team_id, tournament_id }) =>
+      duoApi.pickTieWinner(tieGroup, winner_team_id, tournament_id),
+    onSuccess: (_, { tournament_id }) => {
+      qc.invalidateQueries({ queryKey: ["duo-fixtures", tournament_id] })
     },
   })
 }

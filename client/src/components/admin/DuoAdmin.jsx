@@ -16,7 +16,7 @@ import {
   useCreateDuoTeam, useDeleteDuoTeam,
   useAddDuoPlayer, useRemoveDuoPlayer,
   useGenerateDuoFixtures, useDeleteDuoFixtures, useCreateDuoKnockoutBracket,
-  useSaveDuoResult, useResetDuoFixture, useSetDuoTiebreaker,
+  useSaveDuoResult, useResetDuoFixture, useSetDuoTiebreaker, usePickDuoTieWinner,
   usePlayers,
   useDrawDuoGroups, useGenerateDuoGroupFixtures, useDuoGroupStandings,
   useGenerateDuoKnockout, useDeleteDuoKnockoutFixtures,
@@ -77,7 +77,7 @@ function CreateTournamentForm({ onClose }) {
     team_size: 2,
     format: "round_robin",
     num_teams: 8,
-    settings: { best_player_enabled: false, golden_boot_enabled: false, affects_main_stats: false },
+    settings: { best_player_enabled: false, golden_boot_enabled: false, affects_main_stats: false, home_and_away: false },
   })
   const [err, setErr] = useState("")
 
@@ -159,6 +159,14 @@ function CreateTournamentForm({ onClose }) {
             <span className="text-xs text-slate-300">{label}</span>
           </label>
         ))}
+        {form.format === "round_robin" && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.settings.home_and_away}
+              onChange={e => setSetting("home_and_away", e.target.checked)}
+              className="w-4 h-4 rounded accent-accent" />
+            <span className="text-xs text-slate-300">Home &amp; Away (2-leg matches)</span>
+          </label>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -1024,14 +1032,191 @@ function computeLegNumbers(fixtures) {
   return legMap
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pick Winner panel (shown below both legs when both are completed)
+// ─────────────────────────────────────────────────────────────────────────────
+function PickWinnerPanel({ leg1, tournament, tieGroup }) {
+  const pickWinner = usePickDuoTieWinner()
+  const [selectedId, setSelectedId] = useState("")
+  const [err, setErr] = useState("")
+
+  const homeTeam = tournament.teams?.find(t => t.id === leg1.home_team_id)
+  const awayTeam = tournament.teams?.find(t => t.id === leg1.away_team_id)
+
+  async function handlePick() {
+    if (!selectedId) return
+    setErr("")
+    try {
+      await pickWinner.mutateAsync({
+        tieGroup,
+        winner_team_id: Number(selectedId),
+        tournament_id: tournament.id,
+      })
+      setSelectedId("")
+    } catch (e) {
+      setErr(e.response?.data?.error ?? e.message)
+    }
+  }
+
+  return (
+    <div className="pt-2 mt-1 border-t border-slate-700/40 space-y-1.5">
+      {err && <p className="text-[10px] text-red-400">{err}</p>}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-amber-400 font-semibold shrink-0">Pick Winner:</span>
+        <select
+          value={selectedId}
+          onChange={e => setSelectedId(e.target.value)}
+          className="flex-1 bg-pitch-800 border border-surface-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-accent/40"
+        >
+          <option value="">— Select —</option>
+          {homeTeam && <option value={homeTeam.id}>{homeTeam.name} (H)</option>}
+          {awayTeam && <option value={awayTeam.id}>{awayTeam.name} (A)</option>}
+        </select>
+        <button
+          onClick={handlePick}
+          disabled={!selectedId || pickWinner.isPending}
+          className="px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors disabled:opacity-50 shrink-0"
+        >
+          {pickWinner.isPending ? "…" : "Confirm"}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Single fixture row (used by FixtureList for both tie-grouped and standalone)
+// ─────────────────────────────────────────────────────────────────────────────
+function FixtureRow({ f, tournament, legLabel, resetFixture,
+  enteringResult, setEnteringResult,
+  enteringTb, setEnteringTb,
+  editingFixtureId, setEditingFixtureId,
+  editingInitialData, setEditingInitialData,
+  editResetting, setEditResetting,
+}) {
+  const isEnteringResult = enteringResult === f.id
+  const isEnteringTb     = enteringTb === f.id
+  const isEditing        = editingFixtureId === f.id
+  const completed        = f.status === "completed"
+
+  return (
+    <div className="space-y-2">
+      <div className={cn(
+        "card p-3 flex items-center gap-3",
+        f.is_tiebreaker_needed && "border border-amber-500/30"
+      )}>
+        <div className={cn("w-2 h-2 rounded-full shrink-0",
+          completed ? "bg-emerald-400" : f.is_tiebreaker_needed ? "bg-amber-400 animate-pulse" : "bg-slate-600"
+        )} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm flex-wrap">
+            {f.home_team_group && (
+              <span className="text-[10px] text-accent/70 font-bold">G{GROUP_LETTERS[f.home_team_group-1]}</span>
+            )}
+            {legLabel && (
+              <span className={cn(
+                "text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide",
+                legLabel === 1
+                  ? "bg-sky-500/15 text-sky-400 border border-sky-500/25"
+                  : "bg-violet-500/15 text-violet-400 border border-violet-500/25"
+              )}>
+                Leg {legLabel}
+              </span>
+            )}
+            {/* Home team */}
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">H</span>
+            <span className={cn("font-medium", f.winner_team_id === f.home_team_id ? "text-white" : "text-slate-400")}>
+              {f.home_team_name ?? "TBD"}
+            </span>
+            {completed ? (
+              <span className="text-slate-500 font-bold tabular-nums">{f.home_score}–{f.away_score}</span>
+            ) : (
+              <span className="text-slate-600 text-xs">vs</span>
+            )}
+            {/* Away team */}
+            <span className={cn("font-medium", f.winner_team_id === f.away_team_id ? "text-white" : "text-slate-400")}>
+              {f.away_team_name ?? "TBD"}
+            </span>
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase tracking-wide">A</span>
+            {f.away_team_group && (
+              <span className="text-[10px] text-accent/70 font-bold">G{GROUP_LETTERS[f.away_team_group-1]}</span>
+            )}
+          </div>
+          {f.is_tiebreaker_needed && <p className="text-[10px] text-amber-400 mt-0.5">Tiebreaker required</p>}
+          {completed && f.tiebreaker_result && <p className="text-[10px] text-slate-500 mt-0.5">Won via tiebreaker</p>}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {!completed && !f.is_tiebreaker_needed && f.home_team_id && f.away_team_id && (
+            <button onClick={() => { setEnteringResult(isEnteringResult ? null : f.id); setEnteringTb(null); setEditingFixtureId(null) }}
+              className="px-2 py-1 rounded-lg bg-accent/15 border border-accent/30 text-accent text-xs hover:bg-accent/20 transition-colors">
+              Enter Result
+            </button>
+          )}
+          {f.is_tiebreaker_needed && (
+            <button onClick={() => { setEnteringTb(isEnteringTb ? null : f.id); setEnteringResult(null); setEditingFixtureId(null) }}
+              className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors">
+              Tiebreaker
+            </button>
+          )}
+          {completed && (
+            <>
+              <button
+                disabled={editResetting === f.id}
+                onClick={async () => {
+                  if (isEditing) { setEditingFixtureId(null); setEditingInitialData(null); return }
+                  setEnteringResult(null); setEnteringTb(null)
+                  setEditResetting(f.id)
+                  try {
+                    await resetFixture.mutateAsync({ fixtureId: f.id, tournamentId: tournament.id })
+                    setEditingInitialData(f.match_records ?? [])
+                    setEditingFixtureId(f.id)
+                  } finally { setEditResetting(null) }
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 text-xs hover:bg-sky-500/20 transition-colors disabled:opacity-50"
+                title="Edit result">
+                {editResetting === f.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Pencil className="w-3 h-3" />}
+                <span>{isEditing ? "Cancel" : "Edit"}</span>
+              </button>
+              <button
+                onClick={() => { if (confirm("Reset this result?")) resetFixture.mutate({ fixtureId: f.id, tournamentId: tournament.id }) }}
+                className="p-1 rounded hover:bg-pitch-800 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Reset result">
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {isEnteringResult && <ResultForm fixture={f} tournament={tournament} onClose={() => setEnteringResult(null)} />}
+      {isEditing && (
+        <ResultForm fixture={f} tournament={tournament} initialMatchups={editingInitialData}
+          onClose={() => { setEditingFixtureId(null); setEditingInitialData(null) }} />
+      )}
+      {isEnteringTb && <TiebreakerForm fixture={f} tournament={tournament} onClose={() => setEnteringTb(null)} />}
+    </div>
+  )
+}
+
 function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
   const [enteringResult, setEnteringResult] = useState(null)
   const [enteringTb, setEnteringTb] = useState(null)
   const [editingFixtureId, setEditingFixtureId] = useState(null)
   const [editingInitialData, setEditingInitialData] = useState(null)
-  const [editResetting, setEditResetting] = useState(null)  // fixtureId being reset before edit
+  const [editResetting, setEditResetting] = useState(null)
 
+  // For round_robin double-rounds: compute leg labels from pair-encounter order
   const legNumbers = useMemo(() => computeLegNumbers(fixtures), [fixtures])
+
+  // Shared row props passed to every FixtureRow
+  const rowProps = {
+    tournament, resetFixture,
+    enteringResult, setEnteringResult,
+    enteringTb, setEnteringTb,
+    editingFixtureId, setEditingFixtureId,
+    editingInitialData, setEditingInitialData,
+    editResetting, setEditResetting,
+  }
 
   const displayFixtures = activeRound === "all" || activeRound == null
     ? fixtures
@@ -1046,131 +1231,68 @@ function FixtureList({ fixtures, tournament, resetFixture, activeRound }) {
 
   return (
     <div className="space-y-4">
-      {Object.entries(byRound).map(([round, rFixtures]) => (
-        <div key={round} className="space-y-2">
-          <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Round {round}</p>
-          {rFixtures.map(f => {
-            const isEnteringResult = enteringResult === f.id
-            const isEnteringTb     = enteringTb === f.id
-            const completed = f.status === "completed"
+      {Object.entries(byRound).map(([round, rFixtures]) => {
+        // Separate tie-grouped fixtures (knockout double-leg) from standalone
+        const tieMap = new Map()   // tie_group → [fixture, ...]
+        const singles = []
+        for (const f of rFixtures) {
+          if (f.tie_group != null) {
+            if (!tieMap.has(f.tie_group)) tieMap.set(f.tie_group, [])
+            tieMap.get(f.tie_group).push(f)
+          } else {
+            singles.push(f)
+          }
+        }
 
-            const isEditing = editingFixtureId === f.id
+        return (
+          <div key={round} className="space-y-2">
+            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Round {round}</p>
 
-            return (
-              <div key={f.id} className="space-y-2">
-                <div className={cn(
-                  "card p-3 flex items-center gap-3",
-                  f.is_tiebreaker_needed && "border border-amber-500/30"
-                )}>
-                  <div className={cn("w-2 h-2 rounded-full shrink-0",
-                    completed ? "bg-emerald-400" : f.is_tiebreaker_needed ? "bg-amber-400 animate-pulse" : "bg-slate-600"
-                  )} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-sm flex-wrap">
-                      {f.home_team_group && (
-                        <span className="text-[10px] text-accent/70 font-bold">G{GROUP_LETTERS[f.home_team_group-1]}</span>
-                      )}
-                      {legNumbers[f.id] && (
-                        <span className={cn(
-                          "text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide",
-                          legNumbers[f.id] === 1
-                            ? "bg-sky-500/15 text-sky-400 border border-sky-500/25"
-                            : "bg-violet-500/15 text-violet-400 border border-violet-500/25"
-                        )}>
-                          Leg {legNumbers[f.id]}
-                        </span>
-                      )}
-                      <span className={cn("font-medium", f.winner_team_id === f.home_team_id ? "text-white" : "text-slate-400")}>
-                        {f.home_team_name ?? "TBD"}
+            {/* Double-leg knockout ties */}
+            {[...tieMap.entries()].map(([tg, legs]) => {
+              const sortedLegs = [...legs].sort((a, b) => (a.leg_number ?? 1) - (b.leg_number ?? 1))
+              const leg1 = sortedLegs[0]
+              const bothCompleted = sortedLegs.every(l => l.status === "completed")
+              const winnerPicked  = sortedLegs.some(l => l.winner_team_id != null)
+              const hasBothTeams  = leg1?.home_team_id && leg1?.away_team_id
+              const winner = winnerPicked
+                ? tournament.teams?.find(t => t.id === sortedLegs.find(l => l.winner_team_id)?.winner_team_id)
+                : null
+
+              return (
+                <div key={tg} className="rounded-xl border border-slate-700/50 bg-pitch-800/20 p-3 space-y-2">
+                  {/* Tie header */}
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                      {hasBothTeams ? `${leg1.home_team_name} vs ${leg1.away_team_name}` : "— TBD —"}
+                    </span>
+                    {winner && (
+                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> {winner.name}
                       </span>
-                      {completed ? (
-                        <span className="text-slate-500 font-bold tabular-nums">{f.home_score}–{f.away_score}</span>
-                      ) : (
-                        <span className="text-slate-600 text-xs">vs</span>
-                      )}
-                      <span className={cn("font-medium", f.winner_team_id === f.away_team_id ? "text-white" : "text-slate-400")}>
-                        {f.away_team_name ?? "TBD"}
-                      </span>
-                      {f.away_team_group && (
-                        <span className="text-[10px] text-accent/70 font-bold">G{GROUP_LETTERS[f.away_team_group-1]}</span>
-                      )}
-                    </div>
-                    {f.is_tiebreaker_needed && (
-                      <p className="text-[10px] text-amber-400 mt-0.5">Tiebreaker required</p>
-                    )}
-                    {completed && f.tiebreaker_result && (
-                      <p className="text-[10px] text-slate-500 mt-0.5">Won via tiebreaker</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {!completed && !f.is_tiebreaker_needed && f.home_team_id && f.away_team_id && (
-                      <button onClick={() => { setEnteringResult(isEnteringResult ? null : f.id); setEnteringTb(null); setEditingFixtureId(null) }}
-                        className="px-2 py-1 rounded-lg bg-accent/15 border border-accent/30 text-accent text-xs hover:bg-accent/20 transition-colors">
-                        Enter Result
-                      </button>
-                    )}
-                    {f.is_tiebreaker_needed && (
-                      <button onClick={() => { setEnteringTb(isEnteringTb ? null : f.id); setEnteringResult(null); setEditingFixtureId(null) }}
-                        className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors">
-                        Tiebreaker
-                      </button>
-                    )}
-                    {completed && (
-                      <>
-                        {/* Edit result */}
-                        <button
-                          disabled={editResetting === f.id}
-                          onClick={async () => {
-                            if (isEditing) { setEditingFixtureId(null); setEditingInitialData(null); return }
-                            setEnteringResult(null); setEnteringTb(null)
-                            setEditResetting(f.id)
-                            try {
-                              await resetFixture.mutateAsync({ fixtureId: f.id, tournamentId: tournament.id })
-                              setEditingInitialData(f.match_records ?? [])
-                              setEditingFixtureId(f.id)
-                            } finally {
-                              setEditResetting(null)
-                            }
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 text-xs hover:bg-sky-500/20 transition-colors disabled:opacity-50"
-                          title="Edit result">
-                          {editResetting === f.id
-                            ? <RefreshCw className="w-3 h-3 animate-spin" />
-                            : <Pencil className="w-3 h-3" />
-                          }
-                          <span>{isEditing ? "Cancel" : "Edit"}</span>
-                        </button>
-                        {/* Full reset */}
-                        <button
-                          onClick={() => { if (confirm("Reset this result?")) resetFixture.mutate({ fixtureId: f.id, tournamentId: tournament.id }) }}
-                          className="p-1 rounded hover:bg-pitch-800 text-slate-500 hover:text-slate-300 transition-colors"
-                          title="Reset result">
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
+
+                  {/* Leg rows */}
+                  {sortedLegs.map(f => (
+                    <FixtureRow key={f.id} f={f} legLabel={f.leg_number ?? null} {...rowProps} />
+                  ))}
+
+                  {/* Pick Winner panel (only when both done, no winner yet) */}
+                  {bothCompleted && !winnerPicked && hasBothTeams && leg1 && (
+                    <PickWinnerPanel leg1={leg1} tournament={tournament} tieGroup={tg} />
+                  )}
                 </div>
+              )
+            })}
 
-                {isEnteringResult && (
-                  <ResultForm fixture={f} tournament={tournament} onClose={() => setEnteringResult(null)} />
-                )}
-                {isEditing && (
-                  <ResultForm
-                    fixture={f}
-                    tournament={tournament}
-                    initialMatchups={editingInitialData}
-                    onClose={() => { setEditingFixtureId(null); setEditingInitialData(null) }}
-                  />
-                )}
-                {isEnteringTb && (
-                  <TiebreakerForm fixture={f} tournament={tournament} onClose={() => setEnteringTb(null)} />
-                )}
-              </div>
-            )
-          })}
-        </div>
-      ))}
+            {/* Standalone fixtures (round_robin / old-style) */}
+            {singles.map(f => (
+              <FixtureRow key={f.id} f={f} legLabel={legNumbers[f.id] ?? null} {...rowProps} />
+            ))}
+          </div>
+        )
+      })}
       {fixtures.length === 0 && (
         <p className="text-sm text-slate-500">No fixtures here yet.</p>
       )}
@@ -1192,6 +1314,7 @@ function KnockoutBracketBuilder({ tournament, onCreated }) {
   const teams = tournament.teams ?? []
   const createBracket = useCreateDuoKnockoutBracket()
 
+  const [legs, setLegs]               = useState(null)   // 1 | 2 — chosen first
   const [bracketSize, setBracketSize] = useState(null)   // 4 | 8 | 16 | 32
   const [matchups, setMatchups]       = useState([])     // [{home_team_id, away_team_id}]
   const [err, setErr]                 = useState("")
@@ -1233,6 +1356,7 @@ function KnockoutBracketBuilder({ tournament, onCreated }) {
       await createBracket.mutateAsync({
         tournamentId: tournament.id,
         bracket_size: bracketSize,
+        legs,
         matchups: matchups.map(m => ({
           home_team_id: m.home_team_id ? Number(m.home_team_id) : null,
           away_team_id: m.away_team_id ? Number(m.away_team_id) : null,
@@ -1244,11 +1368,37 @@ function KnockoutBracketBuilder({ tournament, onCreated }) {
     }
   }
 
-  // ── Step 1: pick bracket size
+  // ── Step 1: pick 1-leg or 2-leg
+  if (!legs) {
+    return (
+      <div className="space-y-3">
+        <SectionTitle>Create Knockout Bracket</SectionTitle>
+        <p className="text-xs text-slate-400">How many legs per tie?</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setLegs(1)}
+            className="flex flex-col items-center gap-1.5 p-5 rounded-xl bg-pitch-800 border border-surface-border hover:border-accent/40 hover:bg-pitch-700 transition-colors group">
+            <span className="text-2xl font-black text-accent group-hover:scale-110 transition-transform">1 Leg</span>
+            <span className="text-[11px] text-slate-400">Single match per round</span>
+          </button>
+          <button onClick={() => setLegs(2)}
+            className="flex flex-col items-center gap-1.5 p-5 rounded-xl bg-pitch-800 border border-surface-border hover:border-accent/40 hover:bg-pitch-700 transition-colors group">
+            <span className="text-2xl font-black text-accent group-hover:scale-110 transition-transform">2 Legs</span>
+            <span className="text-[11px] text-slate-400">Home &amp; Away per round</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Step 2: pick bracket size
   if (!bracketSize) {
     return (
       <div className="space-y-3">
         <SectionTitle>Create Knockout Bracket</SectionTitle>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs text-slate-400">{legs === 1 ? "1 Leg" : "2 Legs (Home & Away)"}</span>
+          <button onClick={() => setLegs(null)} className="text-xs text-slate-500 hover:text-slate-300 ml-auto">← Change legs</button>
+        </div>
         <p className="text-xs text-slate-400">Choose the starting round:</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {BRACKET_OPTIONS.map(opt => (
@@ -1264,19 +1414,20 @@ function KnockoutBracketBuilder({ tournament, onCreated }) {
     )
   }
 
-  // ── Step 2: assign teams to match slots
+  // ── Step 3: assign teams to match slots
   const matchCount = bracketSize / 2
   const opt = BRACKET_OPTIONS.find(o => o.size === bracketSize)
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <SectionTitle>{opt.label} Draw</SectionTitle>
+        <SectionTitle>{opt.label} Draw · {legs === 1 ? "1 Leg" : "2 Legs"}</SectionTitle>
         <button onClick={() => { setBracketSize(null); setMatchups([]) }}
           className="text-xs text-slate-500 hover:text-slate-300 ml-auto">← Change round</button>
       </div>
       <p className="text-xs text-slate-400">
         Assign teams to each match. Leave the Away slot empty for a BYE (the home team auto-advances).
+        {legs === 2 && " Each tie will have Leg 1 (Home) and Leg 2 (Away)."}
       </p>
       <Err msg={err} />
 
@@ -1322,7 +1473,7 @@ function KnockoutBracketBuilder({ tournament, onCreated }) {
           <Trophy className="w-4 h-4" />
           {createBracket.isPending ? "Creating…" : `Create ${opt.short} Bracket`}
         </button>
-        <p className="text-xs text-slate-500">{matchCount} matches · winners auto-advance each round</p>
+        <p className="text-xs text-slate-500">{matchCount} ties · {legs === 2 ? "2 legs each · " : ""}admin picks winner each round</p>
       </div>
     </div>
   )
