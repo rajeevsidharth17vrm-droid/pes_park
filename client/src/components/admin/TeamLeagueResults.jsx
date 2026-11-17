@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDown, ChevronUp, CheckCircle, Loader2, Users } from "lucide-react"
+import { ChevronDown, ChevronUp, CheckCircle, Loader2, Users, Pencil, Trash2, X, Check } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { useFixtures, usePlayers, useFixtureRecords } from "../../lib/queries"
 import { recordsApi } from "../../lib/api"
@@ -58,8 +58,11 @@ function AdminEntryRow({ entry, myPlayers, oppPlayers, onChange, onSubmit, submi
 }
 
 function FixtureCard({ fixture, allPlayers }) {
-  const [expanded, setExpanded]   = useState(true)
+  const [expanded, setExpanded]    = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId]  = useState(null)
+  const [editForm, setEditForm]    = useState({})
+  const [deleting, setDeleting]    = useState(null)
   const qc = useQueryClient()
   const { data: existingRecords = [], refetch } = useFixtureRecords(fixture.id)
 
@@ -91,6 +94,45 @@ function FixtureCard({ fixture, allPlayers }) {
 
   function updateEntry(id, field, value) {
     setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e))
+  }
+
+  function startEdit(r) {
+    setEditingId(r.id)
+    setEditForm({ result: r.result, playerScore: r.playerScore ?? 0, opponentScore: r.opponentScore ?? 0 })
+  }
+
+  async function saveEdit(r) {
+    setSubmitting(true)
+    try {
+      await recordsApi.update(r.id, {
+        result:        editForm.result,
+        playerScore:   Number(editForm.playerScore),
+        opponentScore: Number(editForm.opponentScore),
+      })
+      setEditingId(null)
+      qc.invalidateQueries({ queryKey: ["fixture-records", fixture.id] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      refetch()
+    } catch (err) {
+      alert(err?.response?.data?.error || "Failed to update result")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function deleteRecord(id) {
+    if (!window.confirm("Delete this result?")) return
+    setDeleting(id)
+    try {
+      await recordsApi.delete(id)
+      qc.invalidateQueries({ queryKey: ["fixture-records", fixture.id] })
+      qc.invalidateQueries({ queryKey: ["players"] })
+      refetch()
+    } catch (err) {
+      alert(err?.response?.data?.error || "Failed to delete result")
+    } finally {
+      setDeleting(null)
+    }
   }
 
   async function submitEntry(entry) {
@@ -169,18 +211,68 @@ function FixtureCard({ fixture, allPlayers }) {
                 const isHome    = homePlayers.some(p => p.id === r.playerId)
                 const homeName  = isHome ? r.playerName  : r.opponentName
                 const awayName  = isHome ? r.opponentName : r.playerName
-                const result    = isHome ? r.result : (r.result === "win" ? "loss" : r.result === "loss" ? "win" : "draw")
-                const homeScore = isHome ? r.playerScore : r.opponentScore
-                const awayScore = isHome ? r.opponentScore : r.playerScore
-                const chip = { win: RESULT_COLOR.win, draw: RESULT_COLOR.draw, loss: RESULT_COLOR.loss }[result]
+                const dispResult = isHome ? r.result : (r.result === "win" ? "loss" : r.result === "loss" ? "win" : "draw")
+                const homeScore  = isHome ? r.playerScore : r.opponentScore
+                const awayScore  = isHome ? r.opponentScore : r.playerScore
+                const chip       = { win: RESULT_COLOR.win, draw: RESULT_COLOR.draw, loss: RESULT_COLOR.loss }[dispResult]
+                const isEditing  = editingId === r.id
+
                 return (
-                  <div key={r.id} className="flex items-center gap-2 bg-pitch-800 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-slate-300 flex-1 truncate">{homeName}</span>
-                    {homeScore != null && <span className="text-xs font-mono text-slate-400 flex-shrink-0">{homeScore}–{awayScore}</span>}
-                    <span className={cn("text-xs font-bold px-2 py-0.5 rounded border flex-shrink-0", chip)}>
-                      {result === "win" ? "HOME WIN" : result === "loss" ? "AWAY WIN" : "DRAW"}
-                    </span>
-                    <span className="text-slate-300 flex-1 text-right truncate">{awayName}</span>
+                  <div key={r.id} className="bg-pitch-800 rounded-lg px-3 py-2 text-sm space-y-2">
+                    {/* Player names row */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-300 flex-1 truncate">{homeName}</span>
+                      {!isEditing && homeScore != null && (
+                        <span className="text-xs font-mono text-slate-400 flex-shrink-0">{homeScore}–{awayScore}</span>
+                      )}
+                      {!isEditing && (
+                        <span className={cn("text-xs font-bold px-2 py-0.5 rounded border flex-shrink-0", chip)}>
+                          {dispResult === "win" ? "HOME WIN" : dispResult === "loss" ? "AWAY WIN" : "DRAW"}
+                        </span>
+                      )}
+                      <span className="text-slate-300 flex-1 text-right truncate">{awayName}</span>
+                      {/* Edit / Delete buttons */}
+                      {!isEditing && (
+                        <div className="flex gap-1 flex-shrink-0 ml-1">
+                          <button onClick={() => startEdit(r)}
+                            className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-accent transition-colors">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => deleteRecord(r.id)} disabled={deleting === r.id}
+                            className="p-1 rounded hover:bg-rose-400/10 text-slate-500 hover:text-rose-400 transition-colors">
+                            {deleting === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Inline edit form */}
+                    {isEditing && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select value={editForm.result} onChange={e => setEditForm(f => ({ ...f, result: e.target.value }))}
+                          className="flex-1 bg-pitch-900 border border-surface-border rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-accent/40">
+                          <option value="win">Win (Home)</option>
+                          <option value="draw">Draw</option>
+                          <option value="loss">Loss (Home)</option>
+                        </select>
+                        <span className="text-xs text-slate-500">Score:</span>
+                        <input type="number" min="0" value={editForm.playerScore}
+                          onChange={e => setEditForm(f => ({ ...f, playerScore: e.target.value }))}
+                          className="w-12 text-center bg-pitch-900 border border-surface-border rounded-md py-1.5 text-xs text-white focus:outline-none focus:border-accent/40" />
+                        <span className="text-slate-500 text-xs">—</span>
+                        <input type="number" min="0" value={editForm.opponentScore}
+                          onChange={e => setEditForm(f => ({ ...f, opponentScore: e.target.value }))}
+                          className="w-12 text-center bg-pitch-900 border border-surface-border rounded-md py-1.5 text-xs text-white focus:outline-none focus:border-accent/40" />
+                        <button onClick={() => saveEdit(r)} disabled={submitting}
+                          className="p-1.5 rounded bg-accent/15 text-accent border border-accent/25 hover:bg-accent/25 transition-colors">
+                          {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="p-1.5 rounded hover:bg-white/10 text-slate-500 transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
