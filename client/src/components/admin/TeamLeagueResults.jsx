@@ -104,6 +104,7 @@ function FixtureCard({ fixture, allPlayers }) {
         matchType:     "league",
         playerScore:   Number(entry.playerScore) || 0,
         opponentScore: Number(entry.oppScore)    || 0,
+        fixtureId:     fixture.id,
       })
       setEntries(prev => {
         const remaining = prev.filter(e => e.id !== entry.id)
@@ -135,7 +136,10 @@ function FixtureCard({ fixture, allPlayers }) {
             isComplete ? "bg-emerald-400" : loggedCount > 0 ? "bg-amber-400" : "bg-slate-600")} />
           <div className="text-left">
             <p className="text-sm font-semibold text-white">{fixture.home} <span className="text-slate-500 font-normal">vs</span> {fixture.away}</p>
-            <p className="text-xs text-slate-500">Round {fixture.round} · {fixture.date?.slice(0, 10)}</p>
+            <p className="text-xs text-slate-500">
+              Round {fixture.round} · {fixture.date?.slice(0, 10)}
+              {fixture.leg === 2 && <span className="ml-2 text-amber-400 font-semibold">⟳ Return Leg</span>}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">

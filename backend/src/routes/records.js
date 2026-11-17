@@ -107,10 +107,12 @@ router.get("/fixture/:fixtureId", authenticate, async (req, res, next) => {
           -- New records: reliably linked by fixture_id
           mr.fixture_id = $1
           OR (
-            -- Old records from before this link existed: fall back to the
-            -- previous heuristic (team membership + date) so they don't
-            -- disappear from an in-progress fixture during the transition.
-            mr.fixture_id IS NULL
+            -- Old records from before fixture_id existed: fall back to team
+            -- membership + date heuristic.  Restricted to leg-1 fixtures only
+            -- so return-leg (leg 2) fixtures never bleed in first-half records
+            -- from the same team pair.
+            COALESCE(f.leg, 1) = 1
+            AND mr.fixture_id IS NULL
             AND p.team_id   IN (f.home_team_id, f.away_team_id)
             AND opp.team_id IN (f.home_team_id, f.away_team_id)
             AND mr.recorded_at::date >= f.scheduled_date::date
@@ -130,6 +132,7 @@ const createSchema = z.object({
   playerScore:   z.number().int().min(0).optional(),
   opponentScore: z.number().int().min(0).optional(),
   date:          z.string().optional(),
+  fixtureId:     z.number().int().positive().optional(),
 })
 
 // Team-owner self-service result logging. Re-added after being removed
@@ -401,7 +404,7 @@ router.post("/playoff", authenticate, adminOnly, async (req, res, next) => {
 // POST /api/records — admin logs any result
 router.post("/", authenticate, adminOnly, async (req, res, next) => {
   try {
-    const { playerId, opponentId, result, matchType, playerScore, opponentScore, date } =
+    const { playerId, opponentId, result, matchType, playerScore, opponentScore, date, fixtureId } =
       createSchema.parse(req.body)
 
     if (playerId === opponentId) {
@@ -415,14 +418,14 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
     const seasonNumber = await getCurrentSeason()
     const ins = await query(`
       INSERT INTO match_records
-        (player_id, opponent_id, result, opponent_grade, match_type, player_score, opponent_score, recorded_at, recorded_by, season_number)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (player_id, opponent_id, result, opponent_grade, match_type, player_score, opponent_score, recorded_at, recorded_by, season_number, fixture_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
       playerId, opponentId, result, opponentGrade, matchType,
       playerScore ?? null, opponentScore ?? null,
       date || new Date().toISOString().slice(0, 10),
-      req.user.id, seasonNumber,
+      req.user.id, seasonNumber, fixtureId ?? null,
     ])
 
     const letter = result === "win" ? "W" : result === "draw" ? "D" : "L"
