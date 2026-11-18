@@ -86,11 +86,17 @@ router.get("/:id", async (req, res, next) => {
         mr.player_id = $1
         OR (
           mr.opponent_id = $1
+          AND mr.fixture_id IS NOT NULL
+        )
+        OR (
+          mr.opponent_id = $1
+          AND mr.fixture_id IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM match_records r2
             WHERE r2.player_id   = $1
               AND r2.opponent_id = mr.player_id
               AND r2.match_type  = mr.match_type
+              AND r2.fixture_id  IS NULL
           )
         )
       )
@@ -369,11 +375,17 @@ router.get("/:id/compare-stats", async (req, res, next) => {
           player_id = $1
           OR (
             opponent_id = $1
+            AND mr.fixture_id IS NOT NULL
+          )
+          OR (
+            opponent_id = $1
+            AND mr.fixture_id IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM match_records r2
               WHERE r2.player_id   = $1
                 AND r2.opponent_id = mr.player_id
                 AND r2.match_type  = mr.match_type
+                AND r2.fixture_id  IS NULL
             )
           )
         )
@@ -493,12 +505,18 @@ router.get("/:id/performance-zones", async (req, res, next) => {
             mr.player_id=$1
             OR (
               mr.opponent_id=$1
+              AND mr.fixture_id IS NOT NULL
+            )
+            OR (
+              mr.opponent_id=$1
+              AND mr.fixture_id IS NULL
               AND NOT EXISTS (
                 SELECT 1 FROM match_records r2
                 WHERE r2.player_id   = $1
                   AND r2.opponent_id = mr.player_id
                   AND r2.match_type  = mr.match_type
                   AND r2.season_number = mr.season_number
+                  AND r2.fixture_id  IS NULL
               )
             )
           )
