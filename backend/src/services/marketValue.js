@@ -57,18 +57,27 @@ export function matchBpDelta(result) {
 }
 
 // Shared dedup WHERE clause: count each actual game exactly once.
-// player_id records always count; opponent_id records only count when no
-// reverse record exists (prevents double-counting when both teams log).
+// player_id records always count.
+// opponent_id records with fixture_id set (Rd 10+) always count — only one
+// record ever exists per fixture so no deduplication is needed.
+// opponent_id records without fixture_id (old Rd 1-9 style) only count when
+// no reverse player_id record exists for the same old-style match.
 const DEDUP_WHERE = (seasonFilter = true) => `
   AND (
     player_id = $1
     OR (
       opponent_id = $1
+      AND mr.fixture_id IS NOT NULL
+    )
+    OR (
+      opponent_id = $1
+      AND mr.fixture_id IS NULL
       AND NOT EXISTS (
         SELECT 1 FROM match_records r2
         WHERE r2.player_id    = $1
           AND r2.opponent_id  = mr.player_id
           AND r2.match_type   = mr.match_type
+          AND r2.fixture_id   IS NULL
           ${seasonFilter ? "AND r2.season_number = mr.season_number" : ""}
       )
     )
