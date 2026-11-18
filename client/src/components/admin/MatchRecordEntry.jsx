@@ -252,6 +252,8 @@ export default function MatchRecordEntry({ players, initialRecords }) {
   const [playerScore, setPlayerScore] = useState("")
   const [oppScore, setOppScore]       = useState("")
   const [saved, setSaved]             = useState(false)
+  // "recent" = last 7 days only (default), "all" = show everything
+  const [viewMode, setViewMode]       = useState("recent")
   const logRecord                     = useLogRecord()
 
   const selectedOpp = players.find(p => p.id === parseInt(oppId))
@@ -300,6 +302,12 @@ export default function MatchRecordEntry({ players, initialRecords }) {
   const handleEdited = (id, updates) => {
     setRecords(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r))
   }
+
+  // Filter records by view mode
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const filteredRecords = viewMode === "recent"
+    ? records.filter(r => !r.date || new Date(r.date) >= sevenDaysAgo)
+    : records
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -396,12 +404,44 @@ export default function MatchRecordEntry({ players, initialRecords }) {
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
             <h2 className="text-sm font-semibold text-white">Match records</h2>
-            <span className="text-xs text-slate-500">{records.length} logged</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500">{filteredRecords.length} shown</span>
+              {/* View mode toggle */}
+              <div className="flex rounded-lg border border-surface-border overflow-hidden">
+                <button
+                  onClick={() => { setViewMode("recent"); setPage(1) }}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium transition-colors",
+                    viewMode === "recent"
+                      ? "bg-accent/15 text-accent"
+                      : "text-slate-500 hover:text-slate-300"
+                  )}
+                >
+                  Recent
+                </button>
+                <button
+                  onClick={() => { setViewMode("all"); setPage(1) }}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium border-l border-surface-border transition-colors",
+                    viewMode === "all"
+                      ? "bg-accent/15 text-accent"
+                      : "text-slate-500 hover:text-slate-300"
+                  )}
+                >
+                  All
+                </button>
+              </div>
+            </div>
           </div>
 
+          {viewMode === "recent" && filteredRecords.length === 0 && (
+            <div className="px-5 py-3 bg-amber-400/5 border-b border-surface-border">
+              <p className="text-xs text-amber-400">No records in the last 7 days. Switch to <button onClick={() => setViewMode("all")} className="underline font-semibold">All</button> to see historical records.</p>
+            </div>
+          )}
+
           {(() => {
-            // FIFO display — show only the latest 100 records, actual DB data untouched
-            const displayed   = records.slice(0, 100)
+            const displayed   = filteredRecords.slice(0, 100)
             const totalPages  = Math.max(1, Math.ceil(displayed.length / 10))
             const currentPage = Math.min(page, totalPages)
             const pageRecords = displayed.slice((currentPage - 1) * 10, currentPage * 10)
