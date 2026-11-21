@@ -183,6 +183,9 @@ function GroupStageView({ tournament, fixtures }) {
     if (!exportRef.current || exporting) return
     setExporting(true)
     try {
+      // First call warms up font/image loading (result discarded)
+      await toPng(exportRef.current, { pixelRatio: 2, cacheBust: true })
+      // Second call gets the actual rendered image
       const dataUrl = await toPng(exportRef.current, { pixelRatio: 2, cacheBust: true })
       const a = document.createElement("a")
       a.href = dataUrl
@@ -322,6 +325,9 @@ function GroupsView({ tournament }) {
     if (!exportRef.current || exporting) return
     setExporting(true)
     try {
+      // First call warms up font/image loading (result discarded)
+      await toPng(exportRef.current, { pixelRatio: 2, cacheBust: true })
+      // Second call gets the actual rendered image
       const dataUrl = await toPng(exportRef.current, { pixelRatio: 2, cacheBust: true })
       const a = document.createElement("a")
       a.href = dataUrl
@@ -500,6 +506,9 @@ function GoldenBootView({ tournamentId, tournamentName }) {
     if (!exportRef.current || exporting) return
     setExporting(true)
     try {
+      // First call warms up font/image loading (result discarded)
+      await toPng(exportRef.current, { pixelRatio: 2, cacheBust: true })
+      // Second call gets the actual rendered image
       const dataUrl = await toPng(exportRef.current, { pixelRatio: 2, cacheBust: true })
       const a = document.createElement("a")
       a.href = dataUrl

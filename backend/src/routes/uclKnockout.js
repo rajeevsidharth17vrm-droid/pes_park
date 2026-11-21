@@ -108,51 +108,81 @@ function hasNoSameGroupPairs(players) {
 // `groups` is an array of groups, each already ranked [1st, 2nd, 3rd, 4th]
 // by getGroupStandings().
 function generateSeededMatches(groups) {
-  // Only groups with a full 4 qualifiers participate in seeded pairing —
-  // a group short on registered players can't cleanly fill all four pots.
-  const fullGroups = groups.filter(g => g.length === 4)
+  // Flatten all qualified players, keeping their groupId for conflict-avoidance.
+  // Works with any number of qualifiers per group (not just exactly 4).
+  const allPlayers = groups.filter(g => g.length > 0).flatMap(g => g)
 
-  const pot1 = fullGroups.map(g => g[0]) // every group's 1st place
-  const pot2 = fullGroups.map(g => g[1]) // every group's 2nd place
-  const pot3 = fullGroups.map(g => g[2]) // every group's 3rd place
-  const pot4 = fullGroups.map(g => g[3]) // every group's 4th place
+  if (allPlayers.length < 2) return []
 
-  // Randomly pairs potA[i] with a shuffled potB, fixing any pairing where
-  // both players share a group by swapping within potB — same technique
-  // as the existing same-group-avoidance logic, just applied per-pot.
-  function pairPots(potA, potB) {
-    let shuffledB = shuffle(potB)
-    const MAX_PASSES = 100
-    for (let pass = 0; pass < MAX_PASSES; pass++) {
-      let hasConflict = false
-      for (let i = 0; i < potA.length; i++) {
-        if (potA[i].groupId === shuffledB[i].groupId) {
-          hasConflict = true
-          for (let j = 0; j < shuffledB.length; j++) {
-            if (j === i) continue
-            const swapSafe =
-              shuffledB[j].groupId !== potA[i].groupId &&
-              potA[j].groupId !== shuffledB[i].groupId
-            if (swapSafe) {
-              ;[shuffledB[i], shuffledB[j]] = [shuffledB[j], shuffledB[i]]
-              break
+  // If all groups have exactly 4 players, use the structured 1v4/2v3 pot seeding.
+  // Otherwise fall back to a simple shuffle with same-group conflict avoidance.
+  const allGroupsHave4 = groups.every(g => g.length === 4)
+
+  if (allGroupsHave4) {
+    const fullGroups = groups.filter(g => g.length === 4)
+    const pot1 = fullGroups.map(g => g[0])
+    const pot2 = fullGroups.map(g => g[1])
+    const pot3 = fullGroups.map(g => g[2])
+    const pot4 = fullGroups.map(g => g[3])
+
+    function pairPots(potA, potB) {
+      let shuffledB = shuffle(potB)
+      const MAX_PASSES = 100
+      for (let pass = 0; pass < MAX_PASSES; pass++) {
+        let hasConflict = false
+        for (let i = 0; i < potA.length; i++) {
+          if (potA[i].groupId === shuffledB[i].groupId) {
+            hasConflict = true
+            for (let j = 0; j < shuffledB.length; j++) {
+              if (j === i) continue
+              const swapSafe =
+                shuffledB[j].groupId !== potA[i].groupId &&
+                potA[j].groupId !== shuffledB[i].groupId
+              if (swapSafe) {
+                ;[shuffledB[i], shuffledB[j]] = [shuffledB[j], shuffledB[i]]
+                break
+              }
             }
           }
         }
+        if (!hasConflict) break
       }
-      if (!hasConflict) break
+      return potA.map((p, i) => ({ p1Id: p.id, p2Id: shuffledB[i].id }))
     }
-    return potA.map((p, i) => ({ p1Id: p.id, p2Id: shuffledB[i].id }))
+
+    const pairs1v4 = pairPots(pot1, pot4)
+    const pairs2v3 = pairPots(pot2, pot3)
+    const allPairs = shuffle([...pairs1v4, ...pairs2v3])
+    return allPairs.map((pair, i) => ({ matchNumber: i + 1, p1Id: pair.p1Id, p2Id: pair.p2Id }))
   }
 
-  const pairs1v4 = pairPots(pot1, pot4)
-  const pairs2v3 = pairPots(pot2, pot3)
+  // Variable group sizes — pair players sequentially after shuffling,
+  // trying to avoid same-group matchups.
+  let shuffled = shuffle(allPlayers)
+  const MAX_PASSES = 200
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    let hasConflict = false
+    for (let i = 0; i < shuffled.length - 1; i += 2) {
+      if (shuffled[i].groupId === shuffled[i + 1].groupId) {
+        hasConflict = true
+        // Try swapping shuffled[i+1] with a later player from a different group
+        for (let j = i + 2; j < shuffled.length; j++) {
+          if (shuffled[j].groupId !== shuffled[i].groupId) {
+            ;[shuffled[i + 1], shuffled[j]] = [shuffled[j], shuffled[i + 1]]
+            break
+          }
+        }
+      }
+    }
+    if (!hasConflict) break
+    shuffled = shuffle(shuffled)
+  }
 
-  // Randomize which bracket slot each pairing lands in, so 1-vs-4 and
-  // 2-vs-3 matches are mixed throughout the draw rather than grouped.
-  const allPairs = shuffle([...pairs1v4, ...pairs2v3])
-
-  return allPairs.map((pair, i) => ({ matchNumber: i + 1, p1Id: pair.p1Id, p2Id: pair.p2Id }))
+  const pairs = []
+  for (let i = 0; i + 1 < shuffled.length; i += 2) {
+    pairs.push({ matchNumber: Math.floor(i / 2) + 1, p1Id: shuffled[i].id, p2Id: shuffled[i + 1].id })
+  }
+  return pairs
 }
 
 
@@ -202,12 +232,46 @@ router.get("/:id", async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// GET /api/ucl-knockout/preview-standings — return current group standings for manual review
+router.get("/preview-standings", authenticate, adminOnly, async (req, res, next) => {
+  try {
+    const groups = await getGroupStandings()
+    res.json(groups)
+  } catch (err) { next(err) }
+})
+
 // POST /api/ucl-knockout — create tournament from UCL group standings
+// Optional body: playerIds (number[]) — if provided, use those exact players instead of auto top-4.
 router.post("/", authenticate, adminOnly, async (req, res, next) => {
   try {
-    const { name } = z.object({ name: z.string().min(1) }).parse(req.body)
+    const { name, playerIds } = z.object({
+      name: z.string().min(1),
+      playerIds: z.array(z.number().int().positive()).optional(),
+    }).parse(req.body)
 
-    const groups = await getGroupStandings()
+    let groups
+
+    if (playerIds && playerIds.length > 0) {
+      // Manual selection: load each player's group info from DB
+      const playersRes = await query(
+        `SELECT p.id, p.name, p.ucl_group_id AS "groupId", g.name AS "groupName"
+         FROM players p
+         JOIN ucl_groups g ON p.ucl_group_id = g.id
+         WHERE p.id = ANY($1::int[])
+         ORDER BY g.name ASC, p.name ASC`,
+        [playerIds]
+      )
+      // Group by groupId (preserving admin's selection order within each group)
+      const byGroup = {}
+      for (const row of playersRes.rows) {
+        if (!byGroup[row.groupId]) byGroup[row.groupId] = []
+        byGroup[row.groupId].push({ ...row, points: 0, gd: 0, gf: 0 })
+      }
+      groups = Object.values(byGroup)
+    } else {
+      groups = await getGroupStandings()
+    }
+
     if (groups.length < 2) return res.status(400).json({ error: "Not enough UCL groups with players" })
 
     // Flatten all players across groups
@@ -244,15 +308,21 @@ router.post("/", authenticate, adminOnly, async (req, res, next) => {
       )
     }
 
-    // Insert empty future round slots
-    const slotsPerRound = [8, 4, 2, 1] // R16, QF, SF, Final
-    for (let r = 0; r < slotsPerRound.length; r++) {
-      for (let m = 1; m <= slotsPerRound[r]; m++) {
+    // Insert empty future round slots — derived from R1 match count so it
+    // works whether we have 32 players (8 R1 matches → R16 has 8 slots) or
+    // fewer (e.g. 14 players → 7 R1 matches → R2 has 7 slots, etc.).
+    let nextRoundSize = Math.ceil(r32Matches.length / 2)
+    let roundNum = 2
+    while (nextRoundSize >= 1) {
+      for (let m = 1; m <= nextRoundSize; m++) {
         await query(
           "INSERT INTO ucl_knockout_matches (tournament_id, round, match_number, status) VALUES ($1,$2,$3,'pending')",
-          [tournamentId, r + 2, m]
+          [tournamentId, roundNum, m]
         )
       }
+      roundNum++
+      nextRoundSize = Math.ceil(nextRoundSize / 2)
+      if (nextRoundSize === nextRoundSize && nextRoundSize <= 1 && roundNum > 10) break // safety
     }
 
     res.status(201).json(tRes.rows[0])

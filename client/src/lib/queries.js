@@ -749,7 +749,7 @@ export const useUclKnockout = (id) =>
 export const useCreateUclKnockout = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (name) => uclKnockoutApi.create(name),
+    mutationFn: ({ name, playerIds }) => uclKnockoutApi.create(name, playerIds),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ucl-knockout-list"] }),
   })
 }

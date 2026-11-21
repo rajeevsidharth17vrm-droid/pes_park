@@ -44,6 +44,9 @@ export default function UclStandings({ onPlayerClick }) {
     if (!exportRef.current || exporting) return
     setExporting(true)
     try {
+      // First call warms up font/image loading (result discarded)
+      await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2 })
+      // Second call gets the actual rendered image
       const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2 })
       const a = document.createElement("a")
       a.href = dataUrl
@@ -60,6 +63,9 @@ export default function UclStandings({ onPlayerClick }) {
     if (!goldenBootExportRef.current || exporting) return
     setExporting(true)
     try {
+      // First call warms up font/image loading (result discarded)
+      await toPng(goldenBootExportRef.current, { cacheBust: true, pixelRatio: 2 })
+      // Second call gets the actual rendered image
       const dataUrl = await toPng(goldenBootExportRef.current, { cacheBust: true, pixelRatio: 2 })
       const a = document.createElement("a")
       a.href = dataUrl
@@ -76,6 +82,9 @@ export default function UclStandings({ onPlayerClick }) {
     if (!koExportRef.current || exporting) return
     setExporting(true)
     try {
+      // First call warms up font/image loading (result discarded)
+      await toPng(koExportRef.current, { cacheBust: true, pixelRatio: 2 })
+      // Second call gets the actual rendered image
       const dataUrl = await toPng(koExportRef.current, { cacheBust: true, pixelRatio: 2 })
       const a = document.createElement("a")
       a.href = dataUrl
