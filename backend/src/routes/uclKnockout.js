@@ -194,46 +194,9 @@ router.get("/", authenticate, adminOnly, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// GET /api/ucl-knockout/:id — tournament detail
-router.get("/:id", async (req, res, next) => {
-  try {
-    const t = await query("SELECT * FROM ucl_knockout_tournaments WHERE id = $1", [req.params.id])
-    if (!t.rows[0]) return res.status(404).json({ error: "Tournament not found" })
-
-    const players = await query(`
-      SELECT kp.seed, kp.group_position AS "groupPosition",
-             p.id, p.name, g.name AS "groupName"
-      FROM ucl_knockout_players kp
-      JOIN players p ON p.id = kp.player_id
-      LEFT JOIN ucl_groups g ON kp.group_id = g.id
-      WHERE kp.tournament_id = $1
-      ORDER BY kp.seed ASC
-    `, [req.params.id])
-
-    const matches = await query(`
-      SELECT
-        km.*,
-        p1.name AS "player1Name", p1.avatar_id AS "player1AvatarId", p1.avatar_url AS "player1AvatarUrl", p1.avatar_bg_url AS "player1AvatarBgUrl", p1g.name AS "player1Group",
-        p2.name AS "player2Name", p2.avatar_id AS "player2AvatarId", p2.avatar_url AS "player2AvatarUrl", p2.avatar_bg_url AS "player2AvatarBgUrl", p2g.name AS "player2Group",
-        w.name  AS "winnerName"
-      FROM ucl_knockout_matches km
-      LEFT JOIN players p1 ON km.player1_id = p1.id
-      LEFT JOIN players p2 ON km.player2_id = p2.id
-      LEFT JOIN players w  ON km.winner_id  = w.id
-      LEFT JOIN ucl_knockout_players kp1 ON kp1.tournament_id = km.tournament_id AND kp1.player_id = km.player1_id
-      LEFT JOIN ucl_knockout_players kp2 ON kp2.tournament_id = km.tournament_id AND kp2.player_id = km.player2_id
-      LEFT JOIN ucl_groups p1g ON kp1.group_id = p1g.id
-      LEFT JOIN ucl_groups p2g ON kp2.group_id = p2g.id
-      WHERE km.tournament_id = $1
-      ORDER BY km.round ASC, km.match_number ASC
-    `, [req.params.id])
-
-    res.json({ ...t.rows[0], players: players.rows, matches: matches.rows })
-  } catch (err) { next(err) }
-})
-
 // GET /api/ucl-knockout/preview-standings — return current group standings for manual review
 // Uses ALL groups (any status) so the admin can always pick qualifiers.
+// IMPORTANT: must be registered BEFORE /:id to avoid being caught by that wildcard route.
 router.get("/preview-standings", authenticate, adminOnly, async (req, res, next) => {
   try {
     const result = await query(`
@@ -276,6 +239,44 @@ router.get("/preview-standings", authenticate, adminOnly, async (req, res, next)
       byGroup[row.groupId].push(row)
     }
     res.json(Object.values(byGroup))
+  } catch (err) { next(err) }
+})
+
+// GET /api/ucl-knockout/:id — tournament detail
+router.get("/:id", async (req, res, next) => {
+  try {
+    const t = await query("SELECT * FROM ucl_knockout_tournaments WHERE id = $1", [req.params.id])
+    if (!t.rows[0]) return res.status(404).json({ error: "Tournament not found" })
+
+    const players = await query(`
+      SELECT kp.seed, kp.group_position AS "groupPosition",
+             p.id, p.name, g.name AS "groupName"
+      FROM ucl_knockout_players kp
+      JOIN players p ON p.id = kp.player_id
+      LEFT JOIN ucl_groups g ON kp.group_id = g.id
+      WHERE kp.tournament_id = $1
+      ORDER BY kp.seed ASC
+    `, [req.params.id])
+
+    const matches = await query(`
+      SELECT
+        km.*,
+        p1.name AS "player1Name", p1.avatar_id AS "player1AvatarId", p1.avatar_url AS "player1AvatarUrl", p1.avatar_bg_url AS "player1AvatarBgUrl", p1g.name AS "player1Group",
+        p2.name AS "player2Name", p2.avatar_id AS "player2AvatarId", p2.avatar_url AS "player2AvatarUrl", p2.avatar_bg_url AS "player2AvatarBgUrl", p2g.name AS "player2Group",
+        w.name  AS "winnerName"
+      FROM ucl_knockout_matches km
+      LEFT JOIN players p1 ON km.player1_id = p1.id
+      LEFT JOIN players p2 ON km.player2_id = p2.id
+      LEFT JOIN players w  ON km.winner_id  = w.id
+      LEFT JOIN ucl_knockout_players kp1 ON kp1.tournament_id = km.tournament_id AND kp1.player_id = km.player1_id
+      LEFT JOIN ucl_knockout_players kp2 ON kp2.tournament_id = km.tournament_id AND kp2.player_id = km.player2_id
+      LEFT JOIN ucl_groups p1g ON kp1.group_id = p1g.id
+      LEFT JOIN ucl_groups p2g ON kp2.group_id = p2g.id
+      WHERE km.tournament_id = $1
+      ORDER BY km.round ASC, km.match_number ASC
+    `, [req.params.id])
+
+    res.json({ ...t.rows[0], players: players.rows, matches: matches.rows })
   } catch (err) { next(err) }
 })
 
