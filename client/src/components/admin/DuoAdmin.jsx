@@ -6,7 +6,7 @@
 import { useState, useMemo, useRef } from "react"
 import {
   Plus, Trash2, ChevronRight, Users, Trophy, RefreshCw,
-  CheckCircle, AlertCircle, X, Shield, ListOrdered, Shuffle, Settings2, Download, Pencil
+  CheckCircle, AlertCircle, X, Shield, ListOrdered, Shuffle, Settings2, Download, Pencil, ArrowLeftRight
 } from "lucide-react"
 import { toPng } from "html-to-image"
 import logoUrl from "../../../images/logo.png"
@@ -294,6 +294,8 @@ function TeamManager({ tournament }) {
 
   const [newTeamName, setNewTeamName] = useState("")
   const [err, setErr] = useState("")
+  // swappingSlot: { teamId, playerId } — which slot is open for swap
+  const [swappingSlot, setSwappingSlot] = useState(null)
 
   const allAssignedPlayerIds = useMemo(() =>
     (tournament.teams ?? []).flatMap(t => t.players.map(p => p.player_id)),
@@ -358,19 +360,56 @@ function TeamManager({ tournament }) {
 
               {/* Players */}
               <div className="space-y-1.5">
-                {team.players.map(p => (
-                  <div key={p.player_id} className="flex items-center justify-between px-3 py-1.5 bg-pitch-900 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-500 w-4 text-center">#{p.slot}</span>
-                      <span className="text-sm text-white">{p.player_name}</span>
+                {team.players.map(p => {
+                  const isSwapping = swappingSlot?.teamId === team.id && swappingSlot?.playerId === p.player_id
+                  // Exclude all assigned players except the one being swapped out
+                  const swapExcludes = allAssignedPlayerIds.filter(id => id !== p.player_id)
+                  return (
+                    <div key={p.player_id} className="space-y-1">
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-pitch-900 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-500 w-4 text-center">#{p.slot}</span>
+                          <span className="text-sm text-white">{p.player_name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {/* Swap button */}
+                          <button
+                            title="Change player"
+                            onClick={() => setSwappingSlot(isSwapping ? null : { teamId: team.id, playerId: p.player_id })}
+                            className={cn(
+                              "p-1 rounded transition-colors",
+                              isSwapping
+                                ? "bg-sky-500/20 text-sky-400"
+                                : "hover:bg-sky-500/10 text-slate-500 hover:text-sky-400"
+                            )}>
+                            <ArrowLeftRight className="w-3 h-3" />
+                          </button>
+                          {/* Remove button */}
+                          <button
+                            onClick={() => { removePlayer.mutate({ tournamentId: tournament.id, teamId: team.id, playerId: p.player_id }); if (isSwapping) setSwappingSlot(null) }}
+                            className="p-1 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Inline player picker for swap */}
+                      {isSwapping && (
+                        <div className="ml-4">
+                          <PlayerPicker
+                            excludeIds={swapExcludes}
+                            label={`Replace ${p.player_name}`}
+                            onPick={(newPlayer) => {
+                              removePlayer.mutate({ tournamentId: tournament.id, teamId: team.id, playerId: p.player_id })
+                              addPlayer.mutate({ tournamentId: tournament.id, teamId: team.id, player_id: newPlayer.id })
+                              setSwappingSlot(null)
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => removePlayer.mutate({ tournamentId: tournament.id, teamId: team.id, playerId: p.player_id })}
-                      className="p-1 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
 
                 {slotsLeft > 0 && (
                   <PlayerPicker

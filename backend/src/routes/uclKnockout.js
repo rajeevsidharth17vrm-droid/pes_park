@@ -233,10 +233,49 @@ router.get("/:id", async (req, res, next) => {
 })
 
 // GET /api/ucl-knockout/preview-standings — return current group standings for manual review
+// Uses ALL groups (any status) so the admin can always pick qualifiers.
 router.get("/preview-standings", authenticate, adminOnly, async (req, res, next) => {
   try {
-    const groups = await getGroupStandings()
-    res.json(groups)
+    const result = await query(`
+      SELECT
+        p.id, p.name, p.ucl_group_id AS "groupId",
+        g.name AS "groupName",
+        COALESCE(SUM(CASE
+          WHEN uf.status = 'completed' AND uf.player1_id = p.id AND mr.result = 'win'  THEN 3
+          WHEN uf.status = 'completed' AND uf.player2_id = p.id AND mr.result = 'loss' THEN 3
+          WHEN uf.status = 'completed' AND mr.result = 'draw' THEN 1
+          ELSE 0 END), 0) AS points,
+        COALESCE(
+          SUM(CASE
+            WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player1_score,0)
+            WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player2_score,0)
+            ELSE 0 END)
+          - SUM(CASE
+            WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player2_score,0)
+            WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player1_score,0)
+            ELSE 0 END), 0) AS gd,
+        COALESCE(SUM(CASE
+          WHEN uf.status = 'completed' AND uf.player1_id = p.id THEN COALESCE(uf.player1_score,0)
+          WHEN uf.status = 'completed' AND uf.player2_id = p.id THEN COALESCE(uf.player2_score,0)
+          ELSE 0 END), 0) AS gf
+      FROM players p
+      JOIN ucl_groups g ON p.ucl_group_id = g.id
+      LEFT JOIN ucl_fixtures uf
+        ON uf.group_id = p.ucl_group_id
+        AND (uf.player1_id = p.id OR uf.player2_id = p.id)
+      LEFT JOIN match_records mr ON mr.id = uf.match_record_id
+      WHERE p.ucl_group_id IS NOT NULL
+      GROUP BY p.id, p.name, p.ucl_group_id, g.name
+      ORDER BY g.name ASC, points DESC, gd DESC, gf DESC
+    `)
+
+    // Group by groupId (no top-4 cap — show all players for manual selection)
+    const byGroup = {}
+    for (const row of result.rows) {
+      if (!byGroup[row.groupId]) byGroup[row.groupId] = []
+      byGroup[row.groupId].push(row)
+    }
+    res.json(Object.values(byGroup))
   } catch (err) { next(err) }
 })
 

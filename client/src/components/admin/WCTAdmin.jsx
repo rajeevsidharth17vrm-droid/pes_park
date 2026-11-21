@@ -8,9 +8,10 @@ import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query"
 import {
   Trophy, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
   Users, Shuffle, RefreshCw, Star, Shield, ArrowRight, Award, Target,
-  Settings, List, BarChart2, Swords, Footprints, Medal, Sparkles, Download
+  Settings, List, BarChart2, Swords, Footprints, Medal, Sparkles, Download, ArrowLeftRight
 } from "lucide-react"
 import { wctApi } from "../../lib/api"
+import { usePlayers } from "../../lib/queries"
 import { cn } from "../../lib/utils"
 
 // ALL_GROUPS is the full pool — actual groups used come from tournament.group_count
@@ -344,6 +345,7 @@ function GroupDraw({ tournament, teams, onAssign, onUnassign, assigning }) {
 function TeamSetup({ tournament }) {
   const qc = useQueryClient()
   const { data: teams = [] } = useWCTeams(tournament.id)
+  const { data: allPlayers = [] } = usePlayers()
   const [view, setView] = useState("draw") // "teams" | "draw"
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [editingTeam, setEditingTeam] = useState(null)
@@ -485,6 +487,7 @@ function TeamSetup({ tournament }) {
                 <div className="space-y-2">
                   {groupTeams.map(team => (
                     <TeamCard key={team.id} team={team} tournament={tournament} GROUPS={GROUPS}
+                      allPlayers={allPlayers}
                       expanded={expandedTeam===team.id}
                       onExpand={() => setExpandedTeam(expandedTeam===team.id ? null : team.id)}
                       editing={editingTeam===team.id}
@@ -510,6 +513,7 @@ function TeamSetup({ tournament }) {
               <div className="space-y-2">
                 {teams.filter(t=>!t.group_letter).map(team => (
                   <TeamCard key={team.id} team={team} tournament={tournament} GROUPS={GROUPS}
+                    allPlayers={allPlayers}
                     expanded={expandedTeam===team.id}
                     onExpand={() => setExpandedTeam(expandedTeam===team.id ? null : team.id)}
                     editing={editingTeam===team.id}
@@ -538,13 +542,15 @@ function TeamSetup({ tournament }) {
   )
 }
 
-function TeamCard({ team, tournament, GROUPS, expanded, onExpand, editing, onEdit, onSaveEdit, onDelete, onAddPlayer, onDeletePlayer, onEditPlayer }) {
+function TeamCard({ team, tournament, GROUPS, allPlayers = [], expanded, onExpand, editing, onEdit, onSaveEdit, onDelete, onAddPlayer, onDeletePlayer, onEditPlayer }) {
   const [editName, setEditName] = useState(team.name)
   const [editGroup, setEditGroup] = useState(team.group_letter || "")
   const [newPlayerName, setNewPlayerName] = useState("")
   const [newPlayerStarting, setNewPlayerStarting] = useState(false)
-  const [editingPlayer, setEditingPlayer] = useState(null)
+  const [editingPlayer, setEditingPlayer] = useState(null)  // "edit" mode — text input
   const [epName, setEpName] = useState("")
+  const [swappingPlayer, setSwappingPlayer] = useState(null) // "swap" mode — player picker
+  const [swapSearch, setSwapSearch] = useState("")
 
   return (
     <div className="card border border-surface-border overflow-hidden">
@@ -593,29 +599,69 @@ function TeamCard({ team, tournament, GROUPS, expanded, onExpand, editing, onEdi
       {expanded && (
         <div className="border-t border-surface-border p-3 space-y-2 bg-white/2">
           {(team.players||[]).map(p => (
-            <div key={p.id} className="flex items-center gap-2 text-sm">
-              <span className={cn("w-2 h-2 rounded-full flex-shrink-0",
-                p.is_starting ? "bg-accent" : "bg-slate-600")} />
-              {editingPlayer===p.id ? (
-                <>
-                  <input value={epName} onChange={e=>setEpName(e.target.value)}
-                    className="flex-1 bg-surface-raised border border-surface-border rounded px-2 py-0.5 text-xs text-white focus:outline-none" />
-                  <Btn size="sm" variant="emerald" onClick={()=>{onEditPlayer(p.id,{name:epName});setEditingPlayer(null)}}>
-                    <Check className="w-3 h-3"/>
-                  </Btn>
-                  <Btn size="sm" variant="ghost" onClick={()=>setEditingPlayer(null)}><X className="w-3 h-3"/></Btn>
-                </>
-              ) : (
-                <>
-                  <span className="flex-1 text-slate-300">{p.name}</span>
-                  <span className="text-xs text-slate-600">{p.is_starting?"Starting":"Sub"}</span>
-                  <Btn size="sm" variant="ghost" onClick={()=>{setEditingPlayer(p.id);setEpName(p.name)}}>
-                    <Pencil className="w-3 h-3"/>
-                  </Btn>
-                  <Btn size="sm" variant="danger" onClick={()=>onDeletePlayer(p.id)}>
-                    <Trash2 className="w-3 h-3"/>
-                  </Btn>
-                </>
+            <div key={p.id} className="space-y-1">
+              <div className="flex items-center gap-2 text-sm">
+                <span className={cn("w-2 h-2 rounded-full flex-shrink-0",
+                  p.is_starting ? "bg-accent" : "bg-slate-600")} />
+                {editingPlayer===p.id ? (
+                  <>
+                    <input value={epName} onChange={e=>setEpName(e.target.value)}
+                      className="flex-1 bg-surface-raised border border-surface-border rounded px-2 py-0.5 text-xs text-white focus:outline-none" />
+                    <Btn size="sm" variant="emerald" onClick={()=>{onEditPlayer(p.id,{name:epName});setEditingPlayer(null)}}>
+                      <Check className="w-3 h-3"/>
+                    </Btn>
+                    <Btn size="sm" variant="ghost" onClick={()=>setEditingPlayer(null)}><X className="w-3 h-3"/></Btn>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-slate-300">{p.name}</span>
+                    <span className="text-xs text-slate-600">{p.is_starting?"Starting":"Sub"}</span>
+                    {/* Swap player — pick from full player list */}
+                    <Btn size="sm" variant="sky" title="Change player"
+                      onClick={()=>{ setSwappingPlayer(swappingPlayer===p.id?null:p.id); setSwapSearch("") }}>
+                      <ArrowLeftRight className="w-3 h-3"/>
+                    </Btn>
+                    <Btn size="sm" variant="ghost" onClick={()=>{setEditingPlayer(p.id);setEpName(p.name)}}>
+                      <Pencil className="w-3 h-3"/>
+                    </Btn>
+                    <Btn size="sm" variant="danger" onClick={()=>onDeletePlayer(p.id)}>
+                      <Trash2 className="w-3 h-3"/>
+                    </Btn>
+                  </>
+                )}
+              </div>
+
+              {/* Inline player picker for swap */}
+              {swappingPlayer===p.id && (
+                <div className="ml-4 mt-1 p-2 bg-surface-raised border border-surface-border rounded-lg space-y-1.5">
+                  <p className="text-xs text-slate-400 font-semibold">Replace <span className="text-white">{p.name}</span> with:</p>
+                  <input
+                    value={swapSearch}
+                    onChange={e=>setSwapSearch(e.target.value)}
+                    placeholder="Search players…"
+                    autoFocus
+                    className="w-full bg-pitch-800 border border-surface-border rounded px-2 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-accent/40"
+                  />
+                  <div className="max-h-40 overflow-y-auto space-y-0.5">
+                    {allPlayers
+                      .filter(ap => ap.name.toLowerCase().includes(swapSearch.toLowerCase()))
+                      .map(ap => (
+                        <button key={ap.id}
+                          className="w-full text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-accent/15 hover:text-white transition-colors"
+                          onClick={()=>{
+                            onEditPlayer(p.id, {name: ap.name})
+                            setSwappingPlayer(null)
+                            setSwapSearch("")
+                          }}>
+                          {ap.name}
+                        </button>
+                      ))
+                    }
+                    {allPlayers.filter(ap=>ap.name.toLowerCase().includes(swapSearch.toLowerCase())).length===0 && (
+                      <p className="text-xs text-slate-600 px-2 py-1">No players found</p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           ))}
